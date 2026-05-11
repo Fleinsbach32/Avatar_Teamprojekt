@@ -1,14 +1,21 @@
 import chromadb
 import json
 from pypdf import PdfReader
+from chromadb.utils import embedding_functions
+
+embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+    model_name="paraphrase-multilingual-MiniLM-L12-v2"
+)
 
 CHROMA_PATH = r"chroma_db"
 FAQ_PATH = r"data/faq.json"
 PDF_FOLDER = r"data"
 
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
-collection = chroma_client.get_or_create_collection(name="uni_beratung")
-
+collection = chroma_client.get_or_create_collection(
+    name="uni_beratung",
+    embedding_function=embedding_fn
+)
 documents = []
 ids = []
 metadatas = []
@@ -30,7 +37,7 @@ print(f"📄 {len(faqs)} FAQ-Einträge geladen")
 # ── 2. PDFs laden & chunken ───────────────────────────────
 import os
 
-def chunk_text(text, chunk_size=400, overlap=50):
+def chunk_text(text, chunk_size=300, overlap=100):
     chunks = []
     start = 0
     while start < len(text):
