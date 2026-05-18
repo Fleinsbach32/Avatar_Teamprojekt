@@ -13,7 +13,6 @@
       --kit-green-dark: #007a6a;
       --kit-green-dim:  #00968215;
       --kit-blue:       #003865;
-      --kit-blue-mid:   #004d8a;
       --border:         #1e3a52;
       --surface:        #012a45;
       --surface2:       #01213a;
@@ -71,7 +70,6 @@
       font-size: 11px;
       font-weight: 500;
       color: white;
-      letter-spacing: -0.5px;
       flex-shrink: 0;
     }
 
@@ -113,7 +111,7 @@
 
     .avatar-container {
       width: 100%;
-      aspect-ratio: 16/7;
+      aspect-ratio: 16/9;
       background: linear-gradient(160deg, #001829 0%, #002a45 60%, #003865 100%);
       border-radius: 12px;
       overflow: hidden;
@@ -121,6 +119,7 @@
       border: 1px solid rgba(0,150,130,0.2);
     }
 
+    /* Placeholder */
     .avatar-placeholder {
       width: 100%;
       height: 100%;
@@ -128,7 +127,9 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 10px;
+      gap: 12px;
+      position: absolute;
+      top: 0; left: 0;
     }
 
     .avatar-ring {
@@ -160,41 +161,40 @@
     .avatar-label {
       font-size: 12px;
       color: rgba(255,255,255,0.4);
-      font-weight: 300;
     }
 
-    #avatarVideo {
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(0,150,130,0.3);
+      border-top-color: var(--kit-green);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .start-btn {
+      background: var(--kit-green);
+      color: white;
+      border: none;
+      border-radius: 20px;
+      padding: 8px 20px;
+      font-size: 13px;
+      font-family: var(--font);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .start-btn:hover { background: var(--kit-green-dark); }
+    .start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* LiveAvatar iframe */
+    #avatarIframe {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      border: none;
       display: none;
-    }
-
-    .speaking-bar {
-      position: absolute;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: none;
-      align-items: center;
-      gap: 3px;
-      background: rgba(0,150,130,0.85);
-      border-radius: 20px;
-      padding: 5px 12px;
-    }
-
-    .speaking-bar.active { display: flex; }
-
-    .wave { width: 3px; background: white; border-radius: 2px; animation: wave 0.8s ease-in-out infinite; }
-    .wave:nth-child(1) { height: 6px;  animation-delay: 0s; }
-    .wave:nth-child(2) { height: 12px; animation-delay: 0.1s; }
-    .wave:nth-child(3) { height: 18px; animation-delay: 0.2s; }
-    .wave:nth-child(4) { height: 12px; animation-delay: 0.3s; }
-    .wave:nth-child(5) { height: 6px;  animation-delay: 0.4s; }
-
-    @keyframes wave {
-      0%, 100% { transform: scaleY(1); }
-      50%       { transform: scaleY(0.4); }
+      border-radius: 12px;
     }
 
     /* CHIPS */
@@ -444,16 +444,17 @@
     <div class="avatar-container">
       <div class="avatar-placeholder" id="avatarPlaceholder">
         <div class="avatar-ring">🎓</div>
-        <span class="avatar-label">KIRA ist bereit</span>
+        <span class="avatar-label" id="avatarLabel">KIRA ist bereit</span>
+        <button class="start-btn" id="startBtn" onclick="startAvatar()">
+          Avatar starten
+        </button>
       </div>
-      <video id="avatarVideo" autoplay playsinline></video>
-      <div class="speaking-bar" id="speakingBar">
-        <div class="wave"></div>
-        <div class="wave"></div>
-        <div class="wave"></div>
-        <div class="wave"></div>
-        <div class="wave"></div>
-      </div>
+      <!-- LiveAvatar Embed iframe -->
+      <iframe
+        id="avatarIframe"
+        allow="microphone; camera"
+        title="KIRA LiveAvatar"
+      ></iframe>
     </div>
   </div>
 
@@ -495,13 +496,13 @@
 <script>
   const API_URL   = "/chat";
   const sessionId = "session_" + Math.random().toString(36).substr(2, 9);
+  let ttsEnabled  = true;
 
-  let ttsEnabled = true;
-
-  const ttsBtn        = document.getElementById("ttsBtn");
-  const avatarVideo   = document.getElementById("avatarVideo");
-  const avatarPH      = document.getElementById("avatarPlaceholder");
-  const speakingBar   = document.getElementById("speakingBar");
+  const ttsBtn      = document.getElementById("ttsBtn");
+  const avatarIframe = document.getElementById("avatarIframe");
+  const avatarPH    = document.getElementById("avatarPlaceholder");
+  const avatarLabel = document.getElementById("avatarLabel");
+  const startBtn    = document.getElementById("startBtn");
 
   ttsBtn.addEventListener("click", () => {
     ttsEnabled = !ttsEnabled;
@@ -521,6 +522,54 @@
       document.getElementById("statusText").textContent = "server nicht erreichbar";
     });
 
+  // ── LiveAvatar Embed starten ──────────────────────────
+  async function startAvatar() {
+    startBtn.disabled = true;
+    avatarLabel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;color:#009682"><div class="spinner"></div> Verbinde mit KIRA...</div>';
+
+    try {
+      // Backend holt Embed URL — API Key bleibt sicher!
+      const res = await fetch("/liveavatar-embed", { method: "POST" });
+      const data = await res.json();
+
+      if (!data.url) throw new Error("Keine Embed URL erhalten");
+
+      // iframe einblenden
+      avatarIframe.src = data.url;
+      avatarIframe.style.display = "block";
+      avatarPH.style.display = "none";
+
+      document.getElementById("statusText").textContent = "Avatar aktiv";
+
+    } catch (err) {
+      console.error("Avatar Fehler:", err);
+      avatarLabel.textContent = "Avatar nicht verfügbar";
+      startBtn.disabled = false;
+      startBtn.textContent = "Erneut versuchen";
+    }
+  }
+
+  // TTS Fallback
+ async function speak(text) {
+  if (!ttsEnabled) return;
+  try {
+    const res = await fetch("/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    });
+    const data = await res.json();
+    const audio = new Audio(data.audio_url);
+    audio.play();
+  } catch {
+    // Fallback Browser TTS
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = "de-DE";
+    window.speechSynthesis.speak(utt);
+  }
+}
+
+  // ── Chat ─────────────────────────────────────────────
   function quickSend(text) {
     document.getElementById("userInput").value = text;
     sendMessage();
@@ -534,31 +583,6 @@
     this.style.height = "auto";
     this.style.height = Math.min(this.scrollHeight, 120) + "px";
   });
-
-  function speak(text) {
-    if (!ttsEnabled) return;
-    window.speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang = "de-DE";
-    utt.rate = 1.0;
-    utt.onstart = () => speakingBar.classList.add("active");
-    utt.onend   = () => speakingBar.classList.remove("active");
-    window.speechSynthesis.speak(utt);
-  }
-
-  function playVideo(url) {
-    if (!url) return;
-    avatarPH.style.display = "none";
-    avatarVideo.style.display = "block";
-    avatarVideo.src = url;
-    avatarVideo.play();
-    speakingBar.classList.add("active");
-    avatarVideo.onended = () => {
-      speakingBar.classList.remove("active");
-      avatarVideo.style.display = "none";
-      avatarPH.style.display = "flex";
-    };
-  }
 
   async function sendMessage() {
     const input = document.getElementById("userInput");
@@ -594,12 +618,8 @@
       const data = await res.json();
       addMessage("bot", data.answer, { source: data.source, latency_ms: data.latency_ms });
 
-      // Avatar Video oder TTS
-      if (data.video_url) {
-        playVideo(data.video_url);
-      } else {
-        speak(data.answer);
-      }
+      // TTS Fallback (Avatar hat eigene Stimme im iframe)
+      speak(data.answer);
 
     } catch (err) {
       removeTyping(typingId);

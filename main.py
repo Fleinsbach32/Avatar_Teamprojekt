@@ -1,11 +1,13 @@
 import os
 import time
+import httpx
 import chromadb
 from chromadb.utils import embedding_functions
 from google import genai
 from google.genai import types
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -13,6 +15,13 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 load_dotenv()
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ── Einmalig beim Start laden ─────────────────────────────
 embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
@@ -28,10 +37,55 @@ client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 # ── Session Memory ────────────────────────────────────────
 sessions = {}
 
-# ── Request Model ─────────────────────────────────────────
+# ── Request Models ────────────────────────────────────────
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
+
+# ── LiveAvatar Embed Endpoint ─────────────────────────────
+@app.post("/liveavatar-embed")
+async def get_liveavatar_embed():
+    """
+    Generiert eine LiveAvatar Embed URL.
+    API Key bleibt sicher im Backend.
+    """
+    api_key = os.getenv("LIVEAVATAR_API_KEY")
+    avatar_id = os.getenv("LIVEAVATAR_AVATAR_ID", "")  # Avatar ID aus .env
+
+    if not api_key:
+        raise HTTPException(status_code=500, detail="LIVEAVATAR_API_KEY nicht gesetzt")
+
+    async with httpx.AsyncClient() as http:
+        try:
+            payload = {
+                "avatar_id": avatar_id,
+                "is_sandbox": False  # True = kein Credit Verbrauch zum Testen
+            }
+            # Context ID optional hinzufügen wenn ihr einen habt
+            context_id = os.getenv("LIVEAVATAR_CONTEXT_ID", "")
+            if context_id:
+                payload["context_id"] = context_id
+
+            response = await http.post(
+                "https://api.liveavatar.com/v2/embeddings",
+                headers={
+                    "X-API-KEY": api_key,
+                    "Content-Type": "application/json"
+                },
+                json=payload,
+                timeout=10.0
+            )
+            data = response.json()
+            if response.status_code != 200:
+             print(f"LiveAvatar Fehler: {response.status_code} - {data}")
+             raise HTTPException(status_code=response.status_code, detail=str(data))
+
+            return {
+                "url": data["data"]["url"],
+                "script": data["data"]["script"]
+            }
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="LiveAvatar API Timeout")
 
 # ── Chat Endpoint ─────────────────────────────────────────
 @app.post("/chat")
@@ -76,17 +130,13 @@ Gesprächsverlauf:
 
 Frage: {user_input}"""
 
-    # Gemini mit Retry
     for versuch in range(3):
         try:
             t1 = time.time()
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.2,
-                    
-                )
+                config=types.GenerateContentConfig(temperature=0.2)
             )
             answer = response.text
             dauer = (time.time() - t1) * 1000
@@ -98,7 +148,6 @@ Frage: {user_input}"""
                 answer = "Service momentan nicht verfügbar."
                 dauer = 0
 
-    # History updaten
     sessions[session_id].append({"role": "Du", "content": user_input})
     sessions[session_id].append({"role": "Bot", "content": answer})
 
@@ -115,5 +164,31 @@ Frage: {user_input}"""
 def health():
     return {"status": "ok"}
 
-# Frontend servieren
+@app.post("/tts")
+async def text_to_speech(request: dict):
+    api_key = os.getenv("HEYGEN_API_KEY")
+    text = request.get("text", "")
+    
+    async with httpx.AsyncClient() as http:
+        response = await http.post(
+            "https://api.heygen.com/v3/voices/speech",
+            headers={
+                "X-Api-Key": api_key,
+                "Content-Type": "application/json"
+            },
+            json={
+                "text": text,
+                "voice_id": os.getenv("HEYGEN_VOICE_ID", ""),
+                "speed": 1.0
+            },
+            timeout=15.0
+        )
+        # Erst prüfen ob JSON zurückkommt
+        try:
+            data = response.json()
+            return {"audio_url": data["data"]["audio_url"]}
+        except Exception:
+            return {"error": f"Status {response.status_code}: {response.text}"}
+
+# Diese Zeile bleibt die letzte:
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
