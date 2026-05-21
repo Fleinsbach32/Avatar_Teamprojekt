@@ -189,12 +189,13 @@
     .start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* LiveAvatar iframe */
-    #avatarIframe {
+    #avatarVideo {
       width: 100%;
       height: 100%;
       border: none;
-      display: none;
       border-radius: 12px;
+      object-fit: cover;
+      display: none;
     }
 
     /* CHIPS */
@@ -449,12 +450,12 @@
           Avatar starten
         </button>
       </div>
-      <!-- LiveAvatar Embed iframe -->
-      <iframe
-        id="avatarIframe"
-        allow="microphone; camera"
-        title="KIRA LiveAvatar"
-      ></iframe>
+      <video
+        id="avatarVideo"
+        autoplay
+        playsinline
+        style="width:100%;height:100%;border:none;border-radius:12px;display:none;object-fit:cover;"
+      ></video>
     </div>
   </div>
 
@@ -499,7 +500,9 @@
   let ttsEnabled  = true;
 
   const ttsBtn      = document.getElementById("ttsBtn");
-  const avatarIframe = document.getElementById("avatarIframe");
+  const avatarVideo  = document.getElementById("avatarVideo");
+  let streamingSessionId = null;
+  let peerConnection = null;
   const avatarPH    = document.getElementById("avatarPlaceholder");
   const avatarLabel = document.getElementById("avatarLabel");
   const startBtn    = document.getElementById("startBtn");
