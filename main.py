@@ -36,12 +36,13 @@ client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # ── Session Memory ────────────────────────────────────────
 sessions = {}
-streaming_sessions = {}
 
 # ── Avatar Provider Config ────────────────────────────────
 @app.get("/avatar/config")
 def avatar_config():
     provider = os.getenv("AVATAR_PROVIDER", "heygen").lower()
+    if provider == "liveavatar":
+        provider = "heygen"
     if provider not in ("heygen", "anam"):
         provider = "heygen"
     return {"provider": provider}
@@ -81,135 +82,77 @@ class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
 
-# ── Streaming Avatar Endpoints ────────────────────────────
-@app.post("/streaming/new")
-async def streaming_new():
-    api_key = os.getenv("HEYGEN_API_KEY")
+# ── LiveAvatar Endpoints ───────────────────────────────────
+@app.post("/liveavatar/session")
+async def liveavatar_session():
+    api_key = os.getenv("LIVEAVATAR_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="HEYGEN_API_KEY nicht gesetzt")
+        raise HTTPException(status_code=500, detail="LIVEAVATAR_API_KEY nicht gesetzt")
+
+    avatar_id = os.getenv("LIVEAVATAR_AVATAR_ID", "")
+    context_id = os.getenv("LIVEAVATAR_CONTEXT_ID", "")
+    voice_id = os.getenv("LIVEAVATAR_VOICE_ID", "")
+
+    persona: dict = {}
+    if context_id:
+        persona["context_id"] = context_id
+    if voice_id:
+        persona["voice_id"] = voice_id
 
     async with httpx.AsyncClient() as http:
         try:
-            response = await http.post(
-                "https://api.heygen.com/v1/streaming.new",
-                headers={"X-Api-Key": api_key, "Content-Type": "application/json"},
-                json={
-                    "quality": "high",
-                    "avatar_name": os.getenv("HEYGEN_AVATAR_ID", ""),
-                    "voice": {"voice_id": os.getenv("HEYGEN_VOICE_ID", "")}
-                },
+            token_res = await http.post(
+                "https://api.liveavatar.com/v1/sessions/token",
+                headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+                json={"mode": "FULL", "avatar_id": avatar_id, "avatar_persona": persona, "is_sandbox": os.getenv("LIVEAVATAR_SANDBOX", "false").lower() == "true"},
                 timeout=15.0
             )
-            data = response.json()
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail=str(data))
-            session_id = data["data"]["session_id"]
-            streaming_sessions[session_id] = True
+            token_data = token_res.json()
+            if token_res.status_code != 200:
+                raise HTTPException(status_code=token_res.status_code, detail=str(token_data))
+            session_token = token_data["data"]["session_token"]
+            session_id = token_data["data"]["session_id"]
+
+            start_res = await http.post(
+                "https://api.liveavatar.com/v1/sessions/start",
+                headers={"Authorization": f"Bearer {session_token}", "Content-Type": "application/json"},
+                json={},
+                timeout=15.0
+            )
+            start_data = start_res.json()
+            if start_res.status_code not in (200, 201):
+                raise HTTPException(status_code=start_res.status_code, detail=str(start_data))
+
             return {
                 "session_id": session_id,
-                "sdp": data["data"]["sdp"],
-                "ice_servers": data["data"]["ice_servers"],
-                "access_token": data["data"]["access_token"]
+                "livekit_url": start_data["data"]["livekit_url"],
+                "livekit_client_token": start_data["data"]["livekit_client_token"]
             }
         except httpx.TimeoutException:
-            raise HTTPException(status_code=504, detail="HeyGen API Timeout")
+            raise HTTPException(status_code=504, detail="LiveAvatar API Timeout")
 
 
-class StreamingStartRequest(BaseModel):
+class LiveAvatarStopRequest(BaseModel):
     session_id: str
-    sdp: dict
 
 
-@app.post("/streaming/start")
-async def streaming_start(request: StreamingStartRequest):
-    api_key = os.getenv("HEYGEN_API_KEY")
+@app.post("/liveavatar/stop")
+async def liveavatar_stop(request: LiveAvatarStopRequest):
+    api_key = os.getenv("LIVEAVATAR_API_KEY")
     async with httpx.AsyncClient() as http:
         try:
             response = await http.post(
-                "https://api.heygen.com/v1/streaming.start",
-                headers={"X-Api-Key": api_key, "Content-Type": "application/json"},
-                json={"session_id": request.session_id, "sdp": request.sdp},
-                timeout=15.0
-            )
-            data = response.json()
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail=str(data))
-            return {"status": "started"}
-        except httpx.TimeoutException:
-            raise HTTPException(status_code=504, detail="HeyGen API Timeout")
-
-
-class StreamingIceRequest(BaseModel):
-    session_id: str
-    candidate: dict
-
-
-@app.post("/streaming/ice")
-async def streaming_ice(request: StreamingIceRequest):
-    api_key = os.getenv("HEYGEN_API_KEY")
-    async with httpx.AsyncClient() as http:
-        response = await http.post(
-            "https://api.heygen.com/v1/streaming.ice",
-            headers={"X-Api-Key": api_key, "Content-Type": "application/json"},
-            json={"session_id": request.session_id, "candidate": request.candidate},
-            timeout=10.0
-        )
-        data = response.json()
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail=str(data))
-        return {"status": "ok"}
-
-
-class StreamingTaskRequest(BaseModel):
-    session_id: str
-    text: str
-
-
-@app.post("/streaming/task")
-async def streaming_task(request: StreamingTaskRequest):
-    api_key = os.getenv("HEYGEN_API_KEY")
-    async with httpx.AsyncClient() as http:
-        try:
-            response = await http.post(
-                "https://api.heygen.com/v1/streaming.task",
-                headers={"X-Api-Key": api_key, "Content-Type": "application/json"},
-                json={
-                    "session_id": request.session_id,
-                    "text": request.text,
-                    "task_type": "repeat"
-                },
+                "https://api.liveavatar.com/v1/sessions/stop",
+                headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+                json={"session_id": request.session_id, "reason": "USER_CLOSED"},
                 timeout=10.0
             )
             data = response.json()
             if response.status_code != 200:
                 raise HTTPException(status_code=response.status_code, detail=str(data))
-            return {"status": "ok"}
-        except httpx.TimeoutException:
-            raise HTTPException(status_code=504, detail="HeyGen API Timeout")
-
-
-class StreamingStopRequest(BaseModel):
-    session_id: str
-
-
-@app.post("/streaming/stop")
-async def streaming_stop(request: StreamingStopRequest):
-    api_key = os.getenv("HEYGEN_API_KEY")
-    async with httpx.AsyncClient() as http:
-        try:
-            response = await http.post(
-                "https://api.heygen.com/v1/streaming.stop",
-                headers={"X-Api-Key": api_key, "Content-Type": "application/json"},
-                json={"session_id": request.session_id},
-                timeout=10.0
-            )
-            data = response.json()
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail=str(data))
-            streaming_sessions.pop(request.session_id, None)
             return {"status": "stopped"}
         except httpx.TimeoutException:
-            raise HTTPException(status_code=504, detail="HeyGen API Timeout")
+            raise HTTPException(status_code=504, detail="LiveAvatar API Timeout")
 
 # ── Chat Endpoint ─────────────────────────────────────────
 @app.post("/chat")

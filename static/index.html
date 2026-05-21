@@ -6,6 +6,7 @@
   <title>KIRA — KIT Studienberatung</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@anam-ai/js-sdk/dist/index.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -504,8 +505,8 @@
 
   const ttsBtn      = document.getElementById("ttsBtn");
   const avatarVideo  = document.getElementById("avatarVideo");
-  let streamingSessionId = null;
-  let peerConnection = null;
+  let liveKitRoom = null;
+  let liveAvatarSessionId = null;
   let avatarProvider = "heygen";
   let anamClient = null;
   const avatarAudio = document.getElementById("avatarAudio");
@@ -568,92 +569,142 @@
       document.getElementById("statusText").textContent = "server nicht erreichbar";
     });
 
-  // ── HeyGen Streaming Avatar starten (WebRTC) ─────────
+  // ── Avatar starten (Provider-abhängig) ──────────────
   async function startAvatar() {
     startBtn.disabled = true;
     avatarLabel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;color:#009682"><div class="spinner"></div> Verbinde mit KIRA...</div>';
+    if (avatarProvider === "anam") {
+      await _startAvatarAnam();
+    } else {
+      await _startAvatarLiveAvatar();
+    }
+  }
 
+  async function _startAvatarAnam() {
     try {
-      const res = await fetch("/streaming/new", { method: "POST" });
+      const res = await fetch("/avatar/session", { method: "POST" });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || "Session konnte nicht erstellt werden");
       }
-      const { session_id, sdp, ice_servers } = await res.json();
-      streamingSessionId = session_id;
-
-      peerConnection = new RTCPeerConnection({ iceServers: ice_servers });
-
-      peerConnection.ontrack = (event) => {
-        avatarVideo.srcObject = event.streams[0];
-        avatarVideo.style.display = "block";
-        avatarPH.style.display = "none";
-        document.getElementById("statusText").textContent = "bereit";
-      };
-
-      peerConnection.onicecandidate = async (event) => {
-        if (!event.candidate) return;
-        await fetch("/streaming/ice", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session_id: streamingSessionId,
-            candidate: event.candidate.toJSON()
-          })
-        });
-      };
-
-      peerConnection.onconnectionstatechange = () => {
-        const state = peerConnection.connectionState;
-        if (state === "disconnected" || state === "failed") {
-          avatarVideo.style.display = "none";
-          avatarPH.style.display = "flex";
-          avatarLabel.textContent = "Verbindung getrennt";
-          startBtn.disabled = false;
-          startBtn.textContent = "Erneut verbinden";
-          streamingSessionId = null;
-          peerConnection = null;
-          document.getElementById("statusText").textContent = "getrennt";
-        }
-      };
-
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-
-      const startRes = await fetch("/streaming/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_id: streamingSessionId,
-          sdp: { sdp: answer.sdp, type: answer.type }
-        })
-      });
-      if (!startRes.ok) throw new Error("Stream konnte nicht gestartet werden");
-
+      const { session_token, persona_id } = await res.json();
+      anamClient = AnamSDK.createClient(session_token, { personaId: persona_id, disableInputAudio: true });
+      await anamClient.streamToVideoAndAudioElements(avatarVideo, avatarAudio);
+      avatarVideo.style.display = "block";
+      avatarPH.style.display = "none";
+      document.getElementById("statusText").textContent = "bereit";
     } catch (err) {
-      console.error("Avatar Fehler:", err);
+      console.error("Anam Fehler:", err);
       avatarLabel.textContent = "Avatar nicht verfügbar: " + err.message;
       startBtn.disabled = false;
       startBtn.textContent = "Erneut versuchen";
-      streamingSessionId = null;
-      peerConnection = null;
+      anamClient = null;
+    }
+  }
+
+  let avatarSessionReady = false;
+
+  async function _startAvatarLiveAvatar() {
+    avatarSessionReady = false;
+    try {
+      const res = await fetch("/liveavatar/session", { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Session konnte nicht erstellt werden");
+      }
+      const { session_id, livekit_url, livekit_client_token } = await res.json();
+      liveAvatarSessionId = session_id;
+
+      liveKitRoom = new LivekitClient.Room();
+
+      liveKitRoom.on(LivekitClient.RoomEvent.DataReceived, (payload) => {
+        try {
+          const msg = JSON.parse(new TextDecoder().decode(payload));
+          console.log("[LiveAvatar] ←", msg);
+          if (msg.event_type === "session.state_updated") {
+            const state = msg.state ?? msg.session_state ?? msg.data?.state;
+            if (state === "connected") avatarSessionReady = true;
+          }
+        } catch (_) {}
+      });
+
+      liveKitRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
+        if (track.kind === LivekitClient.Track.Kind.Video) {
+          track.attach(avatarVideo);
+          avatarVideo.style.display = "block";
+          avatarPH.style.display = "none";
+          document.getElementById("statusText").textContent = "bereit";
+        }
+        if (track.kind === LivekitClient.Track.Kind.Audio) {
+          track.attach(avatarAudio);
+        }
+      });
+
+      liveKitRoom.on(LivekitClient.RoomEvent.Disconnected, () => {
+        avatarVideo.style.display = "none";
+        avatarPH.style.display = "flex";
+        avatarLabel.textContent = "Verbindung getrennt";
+        startBtn.disabled = false;
+        startBtn.textContent = "Erneut verbinden";
+        liveAvatarSessionId = null;
+        liveKitRoom = null;
+        avatarSessionReady = false;
+        document.getElementById("statusText").textContent = "getrennt";
+      });
+
+      await liveKitRoom.connect(livekit_url, livekit_client_token);
+
+    } catch (err) {
+      console.error("LiveAvatar Fehler:", err);
+      avatarLabel.textContent = "Avatar nicht verfügbar: " + err.message;
+      startBtn.disabled = false;
+      startBtn.textContent = "Erneut versuchen";
+      liveAvatarSessionId = null;
+      liveKitRoom = null;
     }
   }
 
   async function avatarSpeak(text) {
-    if (!streamingSessionId) return;
     if (recognition) recognition.stop();
-    try {
-      await fetch("/streaming/task", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: streamingSessionId, text })
-      });
-    } catch (err) {
-      console.warn("Avatar konnte nicht sprechen:", err);
+    if (avatarProvider === "anam") {
+      if (!anamClient) return;
+      try {
+        await anamClient.talk(text);
+      } catch (err) {
+        console.warn("Anam konnte nicht sprechen:", err);
+      }
+    } else {
+      if (!liveKitRoom) return;
+      try {
+        const event = JSON.stringify({
+          event_id: crypto.randomUUID(),
+          event_type: "avatar.speak_text",
+          session_id: liveAvatarSessionId,
+          source_event_id: null,
+          text: text
+        });
+        console.log("[LiveAvatar] → agent-control:", event);
+        await liveKitRoom.localParticipant.publishData(
+          new TextEncoder().encode(event),
+          { reliable: true, topic: "agent-control" }
+        );
+      } catch (err) {
+        console.error("Avatar konnte nicht sprechen:", err);
+      }
     }
   }
+
+  // ── Cleanup bei Seitenende ────────────────────────────
+  window.addEventListener("beforeunload", () => {
+    if (avatarProvider === "anam") {
+      if (anamClient) anamClient.stopStreaming();
+    } else {
+      if (liveAvatarSessionId) {
+        navigator.sendBeacon("/liveavatar/stop", JSON.stringify({ session_id: liveAvatarSessionId }));
+      }
+      if (liveKitRoom) liveKitRoom.disconnect();
+    }
+  });
 
   // ── Chat ─────────────────────────────────────────────
   function quickSend(text) {
