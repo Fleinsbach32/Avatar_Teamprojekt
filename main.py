@@ -38,6 +38,14 @@ client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 sessions = {}
 streaming_sessions = {}
 
+# ── Avatar Provider Config ────────────────────────────────
+@app.get("/avatar/config")
+def avatar_config():
+    provider = os.getenv("AVATAR_PROVIDER", "heygen").lower()
+    if provider not in ("heygen", "anam"):
+        provider = "heygen"
+    return {"provider": provider}
+
 # ── Request Models ────────────────────────────────────────
 class ChatRequest(BaseModel):
     message: str
