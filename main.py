@@ -36,11 +36,45 @@ client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # ── Session Memory ────────────────────────────────────────
 sessions = {}
+streaming_sessions = {}
 
 # ── Request Models ────────────────────────────────────────
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
+
+# ── Streaming Avatar Endpoints ────────────────────────────
+@app.post("/streaming/new")
+async def streaming_new():
+    api_key = os.getenv("HEYGEN_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="HEYGEN_API_KEY nicht gesetzt")
+
+    async with httpx.AsyncClient() as http:
+        try:
+            response = await http.post(
+                "https://api.heygen.com/v1/streaming.new",
+                headers={"X-Api-Key": api_key, "Content-Type": "application/json"},
+                json={
+                    "quality": "high",
+                    "avatar_name": os.getenv("HEYGEN_AVATAR_ID", ""),
+                    "voice": {"voice_id": os.getenv("HEYGEN_VOICE_ID", "")}
+                },
+                timeout=15.0
+            )
+            data = response.json()
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail=str(data))
+            session_id = data["data"]["session_id"]
+            streaming_sessions[session_id] = True
+            return {
+                "session_id": session_id,
+                "sdp": data["data"]["sdp"],
+                "ice_servers": data["data"]["ice_servers"],
+                "access_token": data["data"]["access_token"]
+            }
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="HeyGen API Timeout")
 
 # ── LiveAvatar Embed Endpoint ─────────────────────────────
 @app.post("/liveavatar-embed")
