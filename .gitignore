@@ -1,6 +1,0 @@
-venv/
-venv312/
-__pycache__/
-.env
-chroma_db/
-*.pyc
