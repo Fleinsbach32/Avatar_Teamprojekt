@@ -76,50 +76,102 @@ async def streaming_new():
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="HeyGen API Timeout")
 
-# ── LiveAvatar Embed Endpoint ─────────────────────────────
-@app.post("/liveavatar-embed")
-async def get_liveavatar_embed():
-    """
-    Generiert eine LiveAvatar Embed URL.
-    API Key bleibt sicher im Backend.
-    """
-    api_key = os.getenv("LIVEAVATAR_API_KEY")
-    avatar_id = os.getenv("LIVEAVATAR_AVATAR_ID", "")  # Avatar ID aus .env
 
-    if not api_key:
-        raise HTTPException(status_code=500, detail="LIVEAVATAR_API_KEY nicht gesetzt")
+class StreamingStartRequest(BaseModel):
+    session_id: str
+    sdp: dict
 
+
+@app.post("/streaming/start")
+async def streaming_start(request: StreamingStartRequest):
+    api_key = os.getenv("HEYGEN_API_KEY")
     async with httpx.AsyncClient() as http:
         try:
-            payload = {
-                "avatar_id": avatar_id,
-                "is_sandbox": False  # True = kein Credit Verbrauch zum Testen
-            }
-            # Context ID optional hinzufügen wenn ihr einen habt
-            context_id = os.getenv("LIVEAVATAR_CONTEXT_ID", "")
-            if context_id:
-                payload["context_id"] = context_id
-
             response = await http.post(
-                "https://api.liveavatar.com/v2/embeddings",
-                headers={
-                    "X-API-KEY": api_key,
-                    "Content-Type": "application/json"
+                "https://api.heygen.com/v1/streaming.start",
+                headers={"X-Api-Key": api_key, "Content-Type": "application/json"},
+                json={"session_id": request.session_id, "sdp": request.sdp},
+                timeout=15.0
+            )
+            data = response.json()
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail=str(data))
+            return {"status": "started"}
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="HeyGen API Timeout")
+
+
+class StreamingIceRequest(BaseModel):
+    session_id: str
+    candidate: dict
+
+
+@app.post("/streaming/ice")
+async def streaming_ice(request: StreamingIceRequest):
+    api_key = os.getenv("HEYGEN_API_KEY")
+    async with httpx.AsyncClient() as http:
+        response = await http.post(
+            "https://api.heygen.com/v1/streaming.ice",
+            headers={"X-Api-Key": api_key, "Content-Type": "application/json"},
+            json={"session_id": request.session_id, "candidate": request.candidate},
+            timeout=10.0
+        )
+        data = response.json()
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail=str(data))
+        return {"status": "ok"}
+
+
+class StreamingTaskRequest(BaseModel):
+    session_id: str
+    text: str
+
+
+@app.post("/streaming/task")
+async def streaming_task(request: StreamingTaskRequest):
+    api_key = os.getenv("HEYGEN_API_KEY")
+    async with httpx.AsyncClient() as http:
+        try:
+            response = await http.post(
+                "https://api.heygen.com/v1/streaming.task",
+                headers={"X-Api-Key": api_key, "Content-Type": "application/json"},
+                json={
+                    "session_id": request.session_id,
+                    "text": request.text,
+                    "task_type": "repeat"
                 },
-                json=payload,
                 timeout=10.0
             )
             data = response.json()
             if response.status_code != 200:
-             print(f"LiveAvatar Fehler: {response.status_code} - {data}")
-             raise HTTPException(status_code=response.status_code, detail=str(data))
-
-            return {
-                "url": data["data"]["url"],
-                "script": data["data"]["script"]
-            }
+                raise HTTPException(status_code=response.status_code, detail=str(data))
+            return {"status": "ok"}
         except httpx.TimeoutException:
-            raise HTTPException(status_code=504, detail="LiveAvatar API Timeout")
+            raise HTTPException(status_code=504, detail="HeyGen API Timeout")
+
+
+class StreamingStopRequest(BaseModel):
+    session_id: str
+
+
+@app.post("/streaming/stop")
+async def streaming_stop(request: StreamingStopRequest):
+    api_key = os.getenv("HEYGEN_API_KEY")
+    async with httpx.AsyncClient() as http:
+        try:
+            response = await http.post(
+                "https://api.heygen.com/v1/streaming.stop",
+                headers={"X-Api-Key": api_key, "Content-Type": "application/json"},
+                json={"session_id": request.session_id},
+                timeout=10.0
+            )
+            data = response.json()
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail=str(data))
+            streaming_sessions.pop(request.session_id, None)
+            return {"status": "stopped"}
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="HeyGen API Timeout")
 
 # ── Chat Endpoint ─────────────────────────────────────────
 @app.post("/chat")
