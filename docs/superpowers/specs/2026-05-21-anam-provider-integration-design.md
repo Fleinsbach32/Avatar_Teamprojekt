@@ -78,7 +78,7 @@ def avatar_config():
 
 ### `POST /avatar/session`
 
-Ruft `POST https://api.anam.ai/v1/auth/session` auf, gibt Session-Token und Persona-ID zurück.
+Ruft `POST https://api.anam.ai/v1/auth/session` auf, gibt Session-Token und Persona-ID zurück. (Endpoint-URL vor Implementierung in der aktuellen [Anam API-Doku](https://docs.anam.ai) verifizieren.)
 
 - Header an Anam: `Authorization: Bearer {ANAM_API_KEY}`
 - Body an Anam: `{ "persona_id": ANAM_PERSONA_ID }`
