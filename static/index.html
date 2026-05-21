@@ -481,8 +481,10 @@
   <!-- Input -->
   <div class="input-area">
     <div class="input-row">
-      <button class="tts-btn active" id="ttsBtn" title="Text-to-Speech">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+      <button class="tts-btn" id="ttsBtn" title="Spracheingabe (Chrome/Edge)">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V22h-3v2h8v-2h-3v-1.06A9 9 0 0 0 21 12v-2h-2z"/>
+        </svg>
       </button>
       <textarea id="userInput" placeholder="Ihre Frage an KIRA..." rows="1"></textarea>
       <button id="sendBtn" onclick="sendMessage()">
@@ -497,7 +499,6 @@
 <script>
   const API_URL   = "/chat";
   const sessionId = "session_" + Math.random().toString(36).substr(2, 9);
-  let ttsEnabled  = true;
 
   const ttsBtn      = document.getElementById("ttsBtn");
   const avatarVideo  = document.getElementById("avatarVideo");
@@ -507,11 +508,42 @@
   const avatarLabel = document.getElementById("avatarLabel");
   const startBtn    = document.getElementById("startBtn");
 
-  ttsBtn.addEventListener("click", () => {
-    ttsEnabled = !ttsEnabled;
-    ttsBtn.classList.toggle("active", ttsEnabled);
-    if (!ttsEnabled) window.speechSynthesis.cancel();
-  });
+  let recognition = null;
+
+  if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
+    ttsBtn.disabled = true;
+    ttsBtn.title = "Spracheingabe nur in Chrome/Edge verfügbar";
+  } else {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.lang = "de-DE";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      document.getElementById("userInput").value = transcript;
+      sendMessage();
+    };
+
+    recognition.onerror = (event) => {
+      console.warn("Spracherkennung:", event.error);
+      ttsBtn.classList.remove("active");
+    };
+
+    recognition.onend = () => {
+      ttsBtn.classList.remove("active");
+    };
+
+    ttsBtn.addEventListener("click", () => {
+      if (ttsBtn.classList.contains("active")) {
+        recognition.stop();
+      } else {
+        recognition.start();
+        ttsBtn.classList.add("active");
+      }
+    });
+  }
 
   // Health Check
   fetch("/health")
@@ -600,6 +632,7 @@
 
   async function avatarSpeak(text) {
     if (!streamingSessionId) return;
+    if (recognition) recognition.stop();
     try {
       await fetch("/streaming/task", {
         method: "POST",
