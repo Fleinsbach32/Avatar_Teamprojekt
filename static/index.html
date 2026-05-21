@@ -525,30 +525,89 @@
       document.getElementById("statusText").textContent = "server nicht erreichbar";
     });
 
-  // ── LiveAvatar Embed starten ──────────────────────────
+  // ── HeyGen Streaming Avatar starten (WebRTC) ─────────
   async function startAvatar() {
     startBtn.disabled = true;
     avatarLabel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;color:#009682"><div class="spinner"></div> Verbinde mit KIRA...</div>';
 
     try {
-      // Backend holt Embed URL — API Key bleibt sicher!
-      const res = await fetch("/liveavatar-embed", { method: "POST" });
-      const data = await res.json();
+      const res = await fetch("/streaming/new", { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Session konnte nicht erstellt werden");
+      }
+      const { session_id, sdp, ice_servers } = await res.json();
+      streamingSessionId = session_id;
 
-      if (!data.url) throw new Error("Keine Embed URL erhalten");
+      peerConnection = new RTCPeerConnection({ iceServers: ice_servers });
 
-      // iframe einblenden
-      avatarIframe.src = data.url;
-      avatarIframe.style.display = "block";
-      avatarPH.style.display = "none";
+      peerConnection.ontrack = (event) => {
+        avatarVideo.srcObject = event.streams[0];
+        avatarVideo.style.display = "block";
+        avatarPH.style.display = "none";
+        document.getElementById("statusText").textContent = "bereit";
+      };
 
-      document.getElementById("statusText").textContent = "Avatar aktiv";
+      peerConnection.onicecandidate = async (event) => {
+        if (!event.candidate) return;
+        await fetch("/streaming/ice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: streamingSessionId,
+            candidate: event.candidate.toJSON()
+          })
+        });
+      };
+
+      peerConnection.onconnectionstatechange = () => {
+        const state = peerConnection.connectionState;
+        if (state === "disconnected" || state === "failed") {
+          avatarVideo.style.display = "none";
+          avatarPH.style.display = "flex";
+          avatarLabel.textContent = "Verbindung getrennt";
+          startBtn.disabled = false;
+          startBtn.textContent = "Erneut verbinden";
+          streamingSessionId = null;
+          peerConnection = null;
+          document.getElementById("statusText").textContent = "getrennt";
+        }
+      };
+
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+
+      const startRes = await fetch("/streaming/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: streamingSessionId,
+          sdp: { sdp: answer.sdp, type: answer.type }
+        })
+      });
+      if (!startRes.ok) throw new Error("Stream konnte nicht gestartet werden");
 
     } catch (err) {
       console.error("Avatar Fehler:", err);
-      avatarLabel.textContent = "Avatar nicht verfügbar";
+      avatarLabel.textContent = "Avatar nicht verfügbar: " + err.message;
       startBtn.disabled = false;
       startBtn.textContent = "Erneut versuchen";
+      streamingSessionId = null;
+      peerConnection = null;
+    }
+  }
+
+  async function avatarSpeak(text) {
+    if (!streamingSessionId) return;
+    try {
+      await fetch("/streaming/task", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: streamingSessionId, text })
+      });
+    } catch (err) {
+      console.warn("Avatar konnte nicht sprechen:", err);
     }
   }
 
