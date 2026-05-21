@@ -611,26 +611,6 @@
     }
   }
 
-  // TTS Fallback
- async function speak(text) {
-  if (!ttsEnabled) return;
-  try {
-    const res = await fetch("/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text })
-    });
-    const data = await res.json();
-    const audio = new Audio(data.audio_url);
-    audio.play();
-  } catch {
-    // Fallback Browser TTS
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang = "de-DE";
-    window.speechSynthesis.speak(utt);
-  }
-}
-
   // ── Chat ─────────────────────────────────────────────
   function quickSend(text) {
     document.getElementById("userInput").value = text;
@@ -680,8 +660,7 @@
       const data = await res.json();
       addMessage("bot", data.answer, { source: data.source, latency_ms: data.latency_ms });
 
-      // TTS Fallback (Avatar hat eigene Stimme im iframe)
-      speak(data.answer);
+      await avatarSpeak(data.answer);
 
     } catch (err) {
       removeTyping(typingId);
