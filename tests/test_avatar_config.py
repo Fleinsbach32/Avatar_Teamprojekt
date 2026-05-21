@@ -45,3 +45,48 @@ def test_avatar_config_invalid_falls_back():
         response = test_client.get("/avatar/config")
     assert response.status_code == 200
     assert response.json() == {"provider": "heygen"}
+
+
+# ── /avatar/session ───────────────────────────────────────
+@patch("main.httpx.AsyncClient")
+def test_avatar_session_success(mock_httpx_class):
+    mock_http = AsyncMock()
+    mock_http.post.return_value = make_mock_response(200, {
+        "session_token": "anam_tok_abc123"
+    })
+    mock_httpx_class.return_value.__aenter__ = AsyncMock(return_value=mock_http)
+    mock_httpx_class.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.dict(os.environ, {
+        "ANAM_API_KEY": "test-anam-key",
+        "ANAM_PERSONA_ID": "persona_123"
+    }):
+        response = test_client.post("/avatar/session")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["session_token"] == "anam_tok_abc123"
+    assert data["persona_id"] == "persona_123"
+
+    call_headers = mock_http.post.call_args.kwargs["headers"]
+    assert call_headers["Authorization"] == "Bearer test-anam-key"
+
+
+def test_avatar_session_missing_api_key():
+    with patch.dict(os.environ, {"ANAM_API_KEY": ""}):
+        response = test_client.post("/avatar/session")
+    assert response.status_code == 500
+
+
+@patch("main.httpx.AsyncClient")
+def test_avatar_session_timeout(mock_httpx_class):
+    import httpx as real_httpx
+    mock_http = AsyncMock()
+    mock_http.post.side_effect = real_httpx.TimeoutException("timeout")
+    mock_httpx_class.return_value.__aenter__ = AsyncMock(return_value=mock_http)
+    mock_httpx_class.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.dict(os.environ, {"ANAM_API_KEY": "test-key", "ANAM_PERSONA_ID": "p1"}):
+        response = test_client.post("/avatar/session")
+
+    assert response.status_code == 504

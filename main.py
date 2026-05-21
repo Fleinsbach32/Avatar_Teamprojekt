@@ -46,6 +46,36 @@ def avatar_config():
         provider = "heygen"
     return {"provider": provider}
 
+
+@app.post("/avatar/session")
+async def avatar_session():
+    api_key = os.getenv("ANAM_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="ANAM_API_KEY nicht gesetzt")
+
+    persona_id = os.getenv("ANAM_PERSONA_ID", "")
+
+    async with httpx.AsyncClient() as http:
+        try:
+            response = await http.post(
+                "https://api.anam.ai/v1/auth/session",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={"persona_id": persona_id},
+                timeout=15.0
+            )
+            data = response.json()
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail=str(data))
+            return {
+                "session_token": data["session_token"],
+                "persona_id": persona_id
+            }
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="Anam API Timeout")
+
 # ── Request Models ────────────────────────────────────────
 class ChatRequest(BaseModel):
     message: str
