@@ -55,11 +55,16 @@ body {
   gap: 10px;
 }
 
+.kit-fan-mark {
+  display: block;
+  flex-shrink: 0;
+}
+
 .kit-wordmark {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--kit-green);
-  letter-spacing: 0.06em;
+  font-size: 18px;
+  font-weight: 800;
+  color: #1a1a1a;
+  letter-spacing: 0.08em;
 }
 
 .header-divider {
@@ -103,19 +108,18 @@ body {
   position: fixed;
   top: 48px; left: 0; right: 0; bottom: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
   background: var(--bg);
+  transition: right 0.3s ease;
 }
 
 .avatar-container {
-  width: 100%;
-  max-width: 480px;
   aspect-ratio: 16/9;
+  width: 100%;
+  max-height: 100%;
   background: linear-gradient(135deg, var(--kit-green) 0%, var(--kit-green-dark) 100%);
-  border-radius: 16px;
+  border-radius: 12px;
   overflow: hidden;
   position: relative;
   box-shadow: var(--shadow);
@@ -194,9 +198,9 @@ body {
 /* ── Chat-Seitenleiste ─────────────────────────────── */
 #chatPanel {
   position: fixed;
-  top: 0; right: 0;
+  top: 48px; right: 0;
   width: 380px;
-  height: 100vh;
+  height: calc(100vh - 48px);
   background: var(--surface);
   box-shadow: -4px 0 24px rgba(0,0,0,0.10);
   display: flex;
@@ -481,7 +485,13 @@ body {
   justify-content: center;
   box-shadow: 0 4px 16px rgba(0,150,130,0.4);
   z-index: 250;
-  transition: background 0.2s, transform 0.15s;
+  transition: background 0.2s, transform 0.15s, opacity 0.2s;
+}
+
+.chat-fab.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.8);
 }
 
 .chat-fab:hover {
@@ -513,6 +523,15 @@ body {
 <!-- KIT-Kopfleiste -->
 <header id="kitHeader">
   <div class="header-left">
+    <svg class="kit-fan-mark" viewBox="0 0 40 40" height="26" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <g fill="#009682">
+        <polygon points="38,38 31,3 38,2"/>
+        <polygon points="38,38 19,7 26,4"/>
+        <polygon points="38,38 10,15 15,10"/>
+        <polygon points="38,38 4,26 7,19"/>
+        <polygon points="38,38 2,38 3,31"/>
+      </g>
+    </svg>
     <span class="kit-wordmark">KIT</span>
     <span class="header-divider">|</span>
     <span class="header-title">KIRA Studienberatung</span>
@@ -537,11 +556,10 @@ body {
       id="avatarVideo"
       autoplay
       playsinline
-      style="width:100%;height:100%;display:none;object-fit:cover;border-radius:16px;"
+      style="width:100%;height:100%;display:none;object-fit:cover;"
     ></video>
     <audio id="avatarAudio" autoplay></audio>
   </div>
-  <p class="avatar-subtitle">KIRA — Studienberaterin KIT</p>
 </main>
 
 <!-- Chat-Seitenleiste -->
@@ -596,13 +614,19 @@ body {
   const fabBadge       = document.getElementById("fabBadge");
   const chipsRow       = document.getElementById("chipsRow");
 
+  const avatarZone = document.querySelector(".avatar-zone");
+
   function openChat() {
     chatPanel.classList.add("open");
     chatToggleBtn.classList.remove("unread");
+    chatToggleBtn.classList.add("hidden");
+    avatarZone.style.right = "380px";
   }
 
   function closeChat() {
     chatPanel.classList.remove("open");
+    chatToggleBtn.classList.remove("hidden");
+    avatarZone.style.right = "0";
   }
 
   chatToggleBtn.addEventListener("click", openChat);
