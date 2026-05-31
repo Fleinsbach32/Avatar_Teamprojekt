@@ -7,6 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@anam-ai/js-sdk/dist/index.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+  <script src="https://unpkg.com/@daily-co/daily-js"></script>
   <style>
 /* ── Design Tokens ─────────────────────────────────── */
 :root {
@@ -645,6 +646,8 @@ body {
   const avatarVideo  = document.getElementById("avatarVideo");
   let liveKitRoom = null;
   let liveAvatarSessionId = null;
+  let tavusCall = null;
+  let tavusConversationId = null;
   let avatarProvider = "heygen";
   let anamClient = null;
   const avatarAudio = document.getElementById("avatarAudio");
@@ -711,7 +714,9 @@ body {
   async function startAvatar() {
     startBtn.disabled = true;
     avatarLabel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;color:#009682"><div class="spinner"></div> Verbinde mit KIRA...</div>';
-    if (avatarProvider === "anam") {
+    if (avatarProvider === "tavus") {
+      await _startAvatarTavus();
+    } else if (avatarProvider === "anam") {
       await _startAvatarAnam();
     } else {
       await _startAvatarLiveAvatar();
@@ -737,6 +742,70 @@ body {
       startBtn.disabled = false;
       startBtn.textContent = "Erneut versuchen";
       anamClient = null;
+    }
+  }
+
+  async function _startAvatarTavus() {
+    try {
+      const res = await fetch("/tavus/session", { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Session konnte nicht erstellt werden");
+      }
+      const { conversation_id, conversation_url } = await res.json();
+      tavusConversationId = conversation_id;
+
+      tavusCall = Daily.createCallObject();
+
+      tavusCall.on("track-started", (e) => {
+        if (e.participant.local) return;
+        if (e.track.kind === "video") {
+          avatarVideo.srcObject = new MediaStream([e.track]);
+          avatarVideo.style.display = "block";
+          avatarPH.style.display = "none";
+          document.getElementById("statusText").textContent = "bereit";
+          document.getElementById("statusDot").className = "status-dot";
+        }
+        if (e.track.kind === "audio") {
+          avatarAudio.srcObject = new MediaStream([e.track]);
+        }
+      });
+
+      tavusCall.on("transcription-message", (e) => {
+        if (!e.is_final) return;
+        openChat();
+        if (e.role === "user") addMessage("user", e.text);
+        if (e.role === "assistant") addMessage("bot", e.text);
+      });
+
+      tavusCall.on("left-meeting", () => {
+        avatarVideo.style.display = "none";
+        avatarPH.style.display = "flex";
+        avatarLabel.textContent = "Verbindung getrennt";
+        startBtn.disabled = false;
+        startBtn.textContent = "Erneut verbinden";
+        tavusCall = null;
+        tavusConversationId = null;
+        document.getElementById("statusText").textContent = "getrennt";
+        document.getElementById("statusDot").className = "status-dot offline";
+      });
+
+      document.getElementById("statusDot").className = "status-dot connecting";
+      document.getElementById("statusText").textContent = "verbindet...";
+
+      await tavusCall.join({
+        url: conversation_url,
+        startVideoOff: false,
+        startAudioOff: false
+      });
+
+    } catch (err) {
+      console.error("Tavus Fehler:", err);
+      avatarLabel.textContent = "Avatar nicht verfügbar: " + err.message;
+      startBtn.disabled = false;
+      startBtn.textContent = "Erneut versuchen";
+      tavusCall = null;
+      tavusConversationId = null;
     }
   }
 
@@ -804,6 +873,9 @@ body {
 
   async function avatarSpeak(text) {
     if (recognition) recognition.stop();
+    if (avatarProvider === "tavus") {
+      return; // Tavus spricht automatisch über CVI
+    }
     if (avatarProvider === "anam") {
       if (!anamClient) return;
       try {
@@ -834,7 +906,12 @@ body {
 
   // ── Cleanup bei Seitenende ────────────────────────────
   window.addEventListener("beforeunload", () => {
-    if (avatarProvider === "anam") {
+    if (avatarProvider === "tavus") {
+      if (tavusConversationId) {
+        navigator.sendBeacon("/tavus/end", JSON.stringify({ conversation_id: tavusConversationId }));
+      }
+      if (tavusCall) tavusCall.destroy();
+    } else if (avatarProvider === "anam") {
       if (anamClient) anamClient.stopStreaming();
     } else {
       if (liveAvatarSessionId) {
