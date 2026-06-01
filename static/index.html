@@ -651,6 +651,9 @@ body {
   let avatarProvider = "heygen";
   let anamClient = null;
   const avatarAudio = document.getElementById("avatarAudio");
+  const pendingTypedMessages = new Set();
+  const pendingEchoReplies = new Set();
+  let tavusTypingId = null;
 
   // Provider aus Backend laden
   fetch("/avatar/config")
@@ -767,7 +770,19 @@ body {
       tavusCall.on("participant-left",  (e) => console.log("[Tavus] participant-left", e.participant, e.action));
       tavusCall.on("error",             (e) => console.error("[Tavus] error", e));
       tavusCall.on("nonfatal-error",    (e) => console.warn("[Tavus] nonfatal-error", e));
-      tavusCall.on("app-message",       (e) => console.log("[Tavus] app-message", e));
+      tavusCall.on("app-message", (e) => {
+        const d = e.data;
+        if (!d || d.event_type !== "conversation.utterance") return;
+        const { role, speech } = d.properties || {};
+        if (!speech || !speech.trim()) return;
+        openChat();
+        if (role === "user") {
+          addMessage("user", speech);
+        } else if (role === "replica") {
+          if (pendingEchoReplies.has(speech)) { pendingEchoReplies.delete(speech); return; }
+          addMessage("bot", speech);
+        }
+      });
 
       tavusCall.on("track-started", (e) => {
         if (e.participant.local) return;
@@ -786,11 +801,25 @@ body {
       tavusCall.on("transcription-message", (e) => {
         if (!e.is_final) return;
         openChat();
-        if (e.role === "user") addMessage("user", e.text);
-        if (e.role === "assistant") addMessage("bot", e.text);
+        if (e.role === "user") {
+          const key = e.text.toLowerCase().trim();
+          if (!key) return;
+          if (pendingTypedMessages.has(key)) {
+            pendingTypedMessages.delete(key);
+            return;
+          }
+          addMessage("user", e.text);
+        } else if (e.role === "assistant") {
+          if (tavusTypingId) { removeTyping(tavusTypingId); tavusTypingId = null; }
+          document.getElementById("sendBtn").disabled = false;
+          document.getElementById("statusText").textContent = "bereit";
+          addMessage("bot", e.text);
+        }
       });
 
       tavusCall.on("left-meeting", () => {
+        pendingTypedMessages.clear();
+        tavusTypingId = null;
         avatarVideo.style.display = "none";
         avatarPH.style.display = "flex";
         avatarLabel.textContent = "Verbindung getrennt";
@@ -814,6 +843,7 @@ body {
         startVideoOff: false,
         startAudioOff: false
       });
+
 
     } catch (err) {
       console.error("Tavus Fehler:", err);
@@ -973,33 +1003,59 @@ body {
     document.getElementById("sendBtn").disabled = true;
     document.getElementById("statusText").textContent = "denkt nach...";
 
-    const typingId = showTyping();
-
-    try {
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, session_id: sessionId })
-      });
-
-      removeTyping(typingId);
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || `HTTP ${res.status}`);
+    if (avatarProvider === "tavus" && tavusCall && tavusConversationId) {
+      const typingId = showTyping();
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text, session_id: sessionId })
+        });
+        removeTyping(typingId);
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.detail || `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        addMessage("bot", data.answer, { source: data.source, latency_ms: data.latency_ms });
+        // Avatar spricht exakt denselben Text; dedup damit utterance-Event nicht doppelt zeigt
+        pendingEchoReplies.add(data.answer);
+        tavusCall.sendAppMessage({
+          message_type: "conversation",
+          event_type: "conversation.echo",
+          conversation_id: tavusConversationId,
+          properties: { modality: "text", text: data.answer }
+        }, "*");
+      } catch (err) {
+        removeTyping(typingId);
+        showError(err.message);
+      } finally {
+        document.getElementById("sendBtn").disabled = false;
+        document.getElementById("statusText").textContent = "bereit";
       }
-
-      const data = await res.json();
-      addMessage("bot", data.answer, { source: data.source, latency_ms: data.latency_ms });
-
-      await avatarSpeak(data.answer);
-
-    } catch (err) {
-      removeTyping(typingId);
-      showError(err.message);
-    } finally {
-      document.getElementById("sendBtn").disabled = false;
-      document.getElementById("statusText").textContent = "bereit";
+    } else {
+      const typingId = showTyping();
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text, session_id: sessionId })
+        });
+        removeTyping(typingId);
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.detail || `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        addMessage("bot", data.answer, { source: data.source, latency_ms: data.latency_ms });
+        await avatarSpeak(data.answer);
+      } catch (err) {
+        removeTyping(typingId);
+        showError(err.message);
+      } finally {
+        document.getElementById("sendBtn").disabled = false;
+        document.getElementById("statusText").textContent = "bereit";
+      }
     }
   }
 

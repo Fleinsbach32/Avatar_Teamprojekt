@@ -118,3 +118,123 @@ def test_tavus_llm_success(mock_client, mock_collection):
     assert "data:" in body
     assert "[DONE]" in body
     assert "campus.kit.edu" in body
+
+
+# ── /tavus/message ────────────────────────────────────────
+@patch("main.httpx.AsyncClient")
+def test_tavus_message_success(mock_httpx_class):
+    mock_http = AsyncMock()
+    mock_http.post.return_value = make_mock_response(200, {})
+    mock_httpx_class.return_value.__aenter__ = AsyncMock(return_value=mock_http)
+    mock_httpx_class.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.dict(os.environ, {"TAVUS_API_KEY": "real-key"}):
+        response = test_client.post("/tavus/message", json={
+            "conversation_id": "conv_abc123",
+            "message": "Wie melde ich mich für Prüfungen an?"
+        })
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "sent"}
+
+    call_args = mock_http.post.call_args
+    assert "conv_abc123" in call_args.args[0]
+    assert call_args.kwargs["json"]["message"] == "Wie melde ich mich für Prüfungen an?"
+    assert call_args.kwargs["headers"]["x-api-key"] == "real-key"
+
+
+def test_tavus_message_empty_message():
+    response = test_client.post("/tavus/message", json={
+        "conversation_id": "conv_abc123",
+        "message": "   "
+    })
+    assert response.status_code == 422
+
+
+def test_tavus_message_missing_api_key():
+    with patch.dict(os.environ, {"TAVUS_API_KEY": ""}):
+        response = test_client.post("/tavus/message", json={
+            "conversation_id": "conv_abc123",
+            "message": "Hallo"
+        })
+    assert response.status_code == 500
+
+
+@patch("main.httpx.AsyncClient")
+def test_tavus_message_api_error(mock_httpx_class):
+    mock_http = AsyncMock()
+    mock_http.post.return_value = make_mock_response(404, {"error": "conversation not found"})
+    mock_httpx_class.return_value.__aenter__ = AsyncMock(return_value=mock_http)
+    mock_httpx_class.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.dict(os.environ, {"TAVUS_API_KEY": "real-key"}):
+        response = test_client.post("/tavus/message", json={
+            "conversation_id": "nonexistent",
+            "message": "Hallo"
+        })
+
+    assert response.status_code == 404
+
+
+@patch("main.httpx.AsyncClient")
+def test_tavus_message_timeout(mock_httpx_class):
+    import httpx as real_httpx
+    mock_http = AsyncMock()
+    mock_http.post.side_effect = real_httpx.TimeoutException("timeout")
+    mock_httpx_class.return_value.__aenter__ = AsyncMock(return_value=mock_http)
+    mock_httpx_class.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    response = test_client.post("/tavus/message", json={
+        "conversation_id": "conv_abc123",
+        "message": "Hallo"
+    })
+    assert response.status_code == 504
+
+
+# ── Prompt-Qualität ────────────────────────────────────────
+@patch("main.collection")
+@patch("main.client")
+def test_tavus_llm_uses_kira_persona(mock_client, mock_collection):
+    mock_collection.query.return_value = {
+        "documents": [["KIT Prüfungsanmeldung über das Campus-Portal."]],
+        "distances": [[0.3]]
+    }
+    mock_response = MagicMock()
+    mock_response.text = "Prüfungen meldest du über campus.kit.edu an."
+    mock_client.models.generate_content.return_value = mock_response
+
+    test_client.post("/tavus/llm", json={
+        "messages": [{"role": "user", "content": "Wie melde ich Prüfungen an?"}],
+        "stream": True
+    })
+
+    call_args = mock_client.models.generate_content.call_args
+    prompt = call_args.kwargs.get("contents") or call_args.args[1]
+    assert isinstance(prompt, str) and len(prompt) > 0, f"Expected string prompt, got: {type(prompt)}"
+    assert "KIRA" in prompt
+    assert "Karlsruher Institut für Technologie" in prompt
+    assert "vorgelesen" in prompt or "Sprachausgabe" in prompt
+
+
+@patch("main.collection")
+@patch("main.client")
+def test_tavus_llm_context_limit_400(mock_client, mock_collection):
+    long_doc = "A" * 500
+    mock_collection.query.return_value = {
+        "documents": [[long_doc]],
+        "distances": [[0.3]]
+    }
+    mock_response = MagicMock()
+    mock_response.text = "Antwort."
+    mock_client.models.generate_content.return_value = mock_response
+
+    test_client.post("/tavus/llm", json={
+        "messages": [{"role": "user", "content": "Test"}],
+        "stream": True
+    })
+
+    call_args = mock_client.models.generate_content.call_args
+    prompt = call_args.kwargs.get("contents") or call_args.args[1]
+    # Verifies hard character truncation at 400, not word-boundary
+    assert "A" * 400 in prompt
+    assert "A" * 401 not in prompt
