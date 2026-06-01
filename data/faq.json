@@ -1,0 +1,82 @@
+[
+  {
+    "question": "Bis wann muss ich mich für das Sommersemester bewerben?",
+    "answer": "Die Bewerbungsfrist für das Sommersemester endet in der Regel am 15. Januar. Für das Wintersemester ist die Frist der 15. Juli. Internationale Studierende haben abweichende Fristen, meist 6 Wochen früher. Alle Fristen findest du im Bewerbungsportal der Universität."
+  },
+  {
+    "question": "Wie bewerbe ich mich für ein Studium an der Universität?",
+    "answer": "Die Bewerbung erfolgt über das Online-Bewerbungsportal der Universität. Du benötigst dein Abiturzeugnis, einen Lichtbildausweis und ggf. Nachweise über Sprachkenntnisse. Nach der Zulassung musst du dich innerhalb der gesetzten Frist immatrikulieren."
+  },
+  {
+    "question": "Was ist der Numerus Clausus und wie wirkt er sich auf meine Bewerbung aus?",
+    "answer": "Der NC ist der Notendurchschnitt des zuletzt zugelassenen Bewerbers im vorherigen Semester. Er variiert je nach Studiengang und Semester. Ein NC von 2.3 bedeutet, dass alle Bewerber mit besserem Schnitt zugelassen wurden. Der aktuelle NC wird auf der Studiengangsseite veröffentlicht."
+  },
+  {
+    "question": "Wie melde ich mich für Prüfungen an?",
+    "answer": "Prüfungsanmeldungen erfolgen über das Campus-Management-System (z.B. CAS oder HISinOne). Die Anmeldefrist liegt meist 4–6 Wochen vor dem Prüfungstermin. Verpasste Anmeldefristen können in der Regel nicht nachträglich verlängert werden. Prüfe die Fristen im Prüfungsamt oder im Vorlesungsverzeichnis."
+  },
+  {
+    "question": "Ich habe eine Prüfung nicht bestanden. Was kann ich tun?",
+    "answer": "Du hast in der Regel das Recht auf zwei Wiederholungsversuche. Die erste Wiederholung findet meist im Folgesemester statt. Bei endgültigem Nichtbestehen (nach 3 Versuchen) kann eine Exmatrikulation drohen. Wende dich ans Prüfungsamt oder die Studienberatung für individuelle Beratung."
+  },
+  {
+    "question": "Wie hoch ist der Semesterbeitrag und was ist darin enthalten?",
+    "answer": "Der Semesterbeitrag beträgt je nach Universität zwischen 150€ und 350€. Er enthält in der Regel den Sozialbeitrag für das Studentenwerk, den AStA-Beitrag und das Semesterticket für den öffentlichen Nahverkehr. Die genaue Aufschlüsselung findest du auf der Seite des Studierendensekretariats."
+  },
+  {
+    "question": "Wann und wie muss ich mich rückmelden?",
+    "answer": "Die Rückmeldung erfolgt durch Zahlung des Semesterbeitrags innerhalb der Rückmeldefrist, meist 6–8 Wochen vor Semesterbeginn. Ohne Rückmeldung erfolgt automatisch die Exmatrikulation. Nach der Zahlung kannst du deine neue Immatrikulationsbescheinigung im Studierendenportal herunterladen."
+  },
+  {
+    "question": "Kann ich mein Studium unterbrechen oder beurlauben lassen?",
+    "answer": "Ja, eine Beurlaubung ist aus wichtigen Gründen möglich, z.B. Krankheit, Auslandssemester, Praktikum oder Schwangerschaft. Der Antrag muss vor Beginn des Semesters beim Studierendensekretariat gestellt werden. Im Urlaubssemester können keine Prüfungen abgelegt werden, BAföG wird in der Regel nicht weitergezahlt."
+  },
+  {
+    "question": "Wie beantrage ich BAföG?",
+    "answer": "BAföG wird beim zuständigen Studierendenwerk beantragt, nicht an der Universität. Du kannst den Antrag online über das BAföG-Digital-Portal stellen. Einzureichen sind Einkommensnachweise der Eltern, Immatrikulationsbescheinigung und Personalausweis. Die Bearbeitung dauert meist 4–8 Wochen."
+  },
+  {
+    "question": "Welche Stipendien gibt es und wie bewerbe ich mich?",
+    "answer": "Die bekanntesten Stipendiengeber sind die 13 Begabtenförderwerke (z.B. Studienstiftung, Heinrich-Böll-Stiftung, DAAD). Voraussetzungen sind meist überdurchschnittliche Leistungen und gesellschaftliches Engagement. Außerdem gibt es das Deutschlandstipendium direkt über die Universität. Bewerbungsfristen variieren je nach Förderwerk."
+  },
+  {
+    "question": "Wie funktioniert das Semesterticket?",
+    "answer": "Das Semesterticket ist im Semesterbeitrag enthalten und berechtigt zur kostenlosen Nutzung des öffentlichen Nahverkehrs im Geltungsbereich. Es gilt zusammen mit dem Studierendenausweis als Fahrschein. Der Geltungsbereich variiert je nach Universität, umfasst meist die Stadt und umliegende Regionen."
+  },
+  {
+    "question": "Wie kann ich den Studiengang wechseln?",
+    "answer": "Ein Fachwechsel ist zum nächsten Semester möglich. Du meldest dich für den neuen Studiengang neu an und meldest dich aus dem alten Studiengang ab. Bereits erbrachte Leistungen können angerechnet werden — das prüft das Prüfungsamt des neuen Studiengangs. Beachte, dass für beliebte Fächer NC-Regeln gelten."
+  },
+  {
+    "question": "Wie läuft ein Auslandssemester ab und wie bewerbe ich mich?",
+    "answer": "Für ein Erasmus+-Semester bewirbst du dich über das International Office deiner Universität, meist 9–12 Monate vor dem geplanten Aufenthalt. Sprachkenntnisse und Noten spielen eine Rolle. Es gibt Fördergelder über Erasmus+ (ca. 200–500€/Monat). Leistungen können über das Learning Agreement angerechnet werden."
+  },
+  {
+    "question": "Wie erhalte ich Zugang zum WLAN und den IT-Services der Uni?",
+    "answer": "Nach der Immatrikulation erhältst du eine Uni-E-Mail-Adresse und Zugangsdaten für das Campus-WLAN (Eduroam). Das Rechenzentrum bietet außerdem VPN-Zugang, Microsoft Office für Studierende und Cloud-Speicher an. Bei Problemen hilft der IT-Support des Rechenzentrums."
+  },
+  {
+    "question": "Wie kann ich mich exmatrikulieren?",
+    "answer": "Die Exmatrikulation erfolgt auf schriftlichen Antrag beim Studierendensekretariat. Sie wird zum Ende des laufenden Semesters wirksam. Du gibst dabei den Studierendenausweis zurück. Eine Exmatrikulationsbescheinigung erhältst du danach als Nachweis."
+  },
+  {
+    "question": "Wo finde ich die Bibliothek und wie funktioniert die Ausleihe?",
+    "answer": "Der Bibliotheksausweis wird mit dem Studierendenausweis aktiviert. Bücher können im Katalog (OPAC) gesucht und vor Ort oder online vorgemerkt werden. Die Ausleihdauer beträgt meist 4 Wochen mit Verlängerungsmöglichkeit. Verspätete Rückgaben werden mit Mahngebühren belegt."
+  },
+  {
+    "question": "Gibt es psychologische Beratung für Studierende?",
+    "answer": "Ja, das Studentenwerk bietet eine kostenlose psychologische Beratungsstelle für Studierende an. Themen sind Prüfungsangst, Stress, Motivation und persönliche Krisen. Termine können telefonisch oder per E-Mail vereinbart werden. Die Beratung ist vertraulich und kostenlos."
+  },
+  {
+    "question": "Wie bekomme ich eine Immatrikulationsbescheinigung?",
+    "answer": "Die Immatrikulationsbescheinigung kannst du jederzeit selbst im Studierendenportal herunterladen und ausdrucken. Sie wird für BAföG, Kindergeld, Krankenversicherung und viele Vergünstigungen benötigt. Nach der Rückmeldung wird automatisch eine neue Bescheinigung für das folgende Semester bereitgestellt."
+  },
+  {
+    "question": "Welche Mensen gibt es und wie viel kostet das Essen?",
+    "answer": "Das Studentenwerk betreibt mehrere Mensen und Cafeterien auf dem Campus. Mit dem Studierendenausweis zahlen Studierende vergünstigte Preise, ein Mittagessen kostet meist zwischen 2€ und 4€. Die aktuellen Speisepläne und Öffnungszeiten findest du auf der Website des Studentenwerks oder in der Mensen-App."
+  },
+  {
+    "question": "Ich weiß nicht welchen Studiengang ich wählen soll. Wo bekomme ich Hilfe?",
+    "answer": "Die Zentrale Studienberatung (ZSB) bietet kostenlose Orientierungsberatung an — persönlich, telefonisch oder per Video. Zusätzlich helfen Schnupperstudium, Hochschulinformationstage und Online-Self-Assessments bei der Entscheidung. Die ZSB ist der richtige erste Anlaufpunkt bei Unsicherheiten zur Studienwahl."
+  }
+]
