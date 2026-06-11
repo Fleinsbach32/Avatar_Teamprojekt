@@ -107,6 +107,26 @@ def opening_instruction(session_id: str) -> str:
         return ""
     return f'\n\nBeginne deine Antwort nicht mit dem Wort "{last}".'
 
+# ── Voice-Antwort (parallel zur Chat-Antwort) ─────────────
+VOICE_RETRY_DELAY = 2
+
+
+async def generate_voice_answer(prompt: str) -> str:
+    letzter_fehler = None
+    for versuch in range(2):
+        try:
+            response = await client.aio.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=300),
+            )
+            return (response.text or "").strip()
+        except Exception as e:
+            letzter_fehler = e
+            if versuch == 0:
+                await asyncio.sleep(VOICE_RETRY_DELAY)
+    raise letzter_fehler
+
 # ── Avatar Provider Config ────────────────────────────────
 @app.get("/avatar/config")
 def avatar_config():
@@ -379,7 +399,7 @@ Frage: {user_message}"""
     return StreamingResponse(stream_answer(), media_type="text/event-stream")
 
 
-# ── Chat Endpoint ─────────────────────────────────────────
+# ── Chat Endpoint (SSE-Streaming, Dual-Prompt) ────────────
 @app.post("/chat")
 async def chat(request: ChatRequest):
     session_id = request.session_id
@@ -387,12 +407,13 @@ async def chat(request: ChatRequest):
 
     if session_id not in sessions:
         sessions[session_id] = []
-
     chat_history = sessions[session_id]
 
     kontext, kontext_anweisung, beste_distanz = build_rag_context(user_input)
+    verlauf = chr(10).join(f"{m['role']}: {m['content']}" for m in chat_history[-4:])
 
-    prompt = f"""{KIRA_CHAT_PROMPT}
+    def build_prompt(system_prompt: str, extra: str = "") -> str:
+        return f"""{system_prompt}{extra}
 
 {kontext_anweisung}
 
@@ -400,39 +421,59 @@ Kontext:
 {kontext}
 
 Gesprächsverlauf:
-{chr(10).join([f"{m['role']}: {m['content']}" for m in chat_history[-4:]])}
+{verlauf}
 
 Frage: {user_input}"""
 
-    for versuch in range(3):
-        try:
-            t1 = time.time()
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.2)
-            )
-            answer = response.text
-            dauer = (time.time() - t1) * 1000
-            break
-        except Exception as e:
-            if versuch < 2:
-                time.sleep(5)
-            else:
-                answer = "Service momentan nicht verfügbar."
-                dauer = 0
-
-    sessions[session_id].append({"role": "Du", "content": user_input})
-    sessions[session_id].append({"role": "Bot", "content": answer})
-
+    chat_prompt = build_prompt(KIRA_CHAT_PROMPT)
+    voice_prompt = build_prompt(KIRA_VOICE_PROMPT, opening_instruction(session_id))
     quelle = "Wissensbasis" if beste_distanz < 0.45 else "LLM"
 
-    return {
-        "answer": answer,
-        "source": quelle,
-        "latency_ms": round(dauer),
-        "session_id": session_id
-    }
+    async def event_stream():
+        t1 = time.time()
+        voice_task = asyncio.ensure_future(generate_voice_answer(voice_prompt))
+        chat_parts = []
+        try:
+            stream = await client.aio.models.generate_content_stream(
+                model="gemini-2.5-flash",
+                contents=chat_prompt,
+                config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=500),
+            )
+            async for chunk in stream:
+                if chunk.text:
+                    chat_parts.append(chunk.text)
+                    yield f'data: {json_lib.dumps({"type": "chunk", "text": chunk.text})}\n\n'
+        except Exception as e:
+            logging.warning(f"/chat Gemini Fehler: {e}")
+            voice_task.cancel()
+            yield f'data: {json_lib.dumps({"type": "error", "message": "Service momentan nicht verfügbar."})}\n\n'
+            return
+
+        chat_answer = "".join(chat_parts).strip()
+        try:
+            voice_answer = await voice_task
+        except Exception as e:
+            logging.warning(f"/chat Voice Fehler, Fallback auf Chat-Text: {e}")
+            voice_answer = chat_answer
+        if not voice_answer:
+            voice_answer = chat_answer
+
+        voice_answer = maybe_add_filler(voice_answer)
+        remember_opening(session_id, voice_answer)
+
+        sessions[session_id].append({"role": "Du", "content": user_input})
+        sessions[session_id].append({"role": "Bot", "content": chat_answer})
+
+        done_event = {
+            "type": "done",
+            "voice_text": voice_answer,
+            "source": quelle,
+            "latency_ms": round((time.time() - t1) * 1000),
+            "session_id": session_id,
+        }
+        yield f'data: {json_lib.dumps(done_event)}\n\n'
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 @app.get("/health")
 def health():

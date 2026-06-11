@@ -144,6 +144,15 @@ def test_streaming_task_removed():
 
 # ── Prompt-Qualität /chat ──────────────────────────────────
 
+def make_async_stream(texts):
+    async def gen():
+        for t in texts:
+            chunk = MagicMock()
+            chunk.text = t
+            yield chunk
+    return gen()
+
+
 @patch("main.collection")
 @patch("main.client")
 def test_chat_uses_kira_persona(mock_client, mock_collection):
@@ -151,18 +160,20 @@ def test_chat_uses_kira_persona(mock_client, mock_collection):
         "documents": [["KIT Bewerbungsfrist 15. Juli."]],
         "distances": [[0.3]]
     }
-    mock_response = MagicMock()
-    mock_response.text = "Die Bewerbungsfrist ist am fünfzehnten Juli."
-    mock_client.models.generate_content.return_value = mock_response
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=make_async_stream(["Die Bewerbungsfrist ist am 15. Juli."])
+    )
+    mock_client.aio.models.generate_content = AsyncMock(
+        return_value=MagicMock(text="Die Bewerbungsfrist ist am fünfzehnten Juli.")
+    )
 
     test_client.post("/chat", json={"message": "Wann ist die Bewerbungsfrist?", "session_id": "test_persona"})
 
-    call_args = mock_client.models.generate_content.call_args
-    prompt = call_args.kwargs.get("contents") or call_args.args[1]
+    prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
     assert isinstance(prompt, str) and len(prompt) > 0
     assert "KIRA" in prompt
     assert "Karlsruher Institut für Technologie" in prompt
-    # /chat must NOT contain voice instructions
+    # /chat darf KEINE Sprach-Anweisungen enthalten
     assert "vorgelesen" not in prompt
     assert "Sprachausgabe" not in prompt
 
@@ -175,15 +186,15 @@ def test_chat_context_limit_400(mock_client, mock_collection):
         "documents": [[long_doc]],
         "distances": [[0.3]]
     }
-    mock_response = MagicMock()
-    mock_response.text = "Antwort."
-    mock_client.models.generate_content.return_value = mock_response
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=make_async_stream(["Antwort."])
+    )
+    mock_client.aio.models.generate_content = AsyncMock(return_value=MagicMock(text="Antwort."))
 
     test_client.post("/chat", json={"message": "Test", "session_id": "test_limit"})
 
-    call_args = mock_client.models.generate_content.call_args
-    prompt = call_args.kwargs.get("contents") or call_args.args[1]
+    prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
     assert isinstance(prompt, str) and len(prompt) > 0
-    # Verifies hard character truncation at 400, not word-boundary
+    # Harte Zeichen-Trunkierung bei 400
     assert "B" * 400 in prompt
     assert "B" * 401 not in prompt
