@@ -366,7 +366,7 @@ async def tavus_llm(request: TavusLLMRequest):
             yield 'data: [DONE]\n\n'
         return StreamingResponse(empty_stream(), media_type="text/event-stream")
 
-    kontext, kontext_anweisung, beste_distanz = build_rag_context(user_message)
+    kontext, kontext_anweisung, _ = build_rag_context(user_message)
 
     prompt = f"""{KIRA_VOICE_PROMPT}
 
@@ -377,24 +377,29 @@ Kontext:
 
 Frage: {user_message}"""
 
-    answer = "Service momentan nicht verfügbar."
-    for versuch in range(3):
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.2)
-            )
-            answer = response.text
-            break
-        except Exception as e:
-            logging.warning(f"tavus/llm Gemini Fehler (Versuch {versuch+1}): {e}")
-            if versuch < 2:
-                time.sleep(3)
-
     async def stream_answer():
-        yield f'data: {json_lib.dumps({"choices":[{"delta":{"content": answer},"finish_reason":None}]})}\n\n'
-        yield f'data: {json_lib.dumps({"choices":[{"delta":{},"finish_reason":"stop"}]})}\n\n'
+        gesendet = False
+        for versuch in range(3):
+            try:
+                stream = await client.aio.models.generate_content_stream(
+                    model="gemini-2.5-flash",
+                    contents=prompt,
+                    config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=300),
+                )
+                async for chunk in stream:
+                    if chunk.text:
+                        gesendet = True
+                        yield f'data: {json_lib.dumps({"choices": [{"delta": {"content": chunk.text}, "finish_reason": None}]})}\n\n'
+                break
+            except Exception as e:
+                logging.warning(f"tavus/llm Gemini Fehler (Versuch {versuch + 1}): {e}")
+                if gesendet:
+                    break  # mitten im Stream abgebrochen: kein Retry, sonst doppelter Text
+                if versuch < 2:
+                    await asyncio.sleep(VOICE_RETRY_DELAY)
+        if not gesendet:
+            yield f'data: {json_lib.dumps({"choices": [{"delta": {"content": "Service momentan nicht verfügbar."}, "finish_reason": None}]})}\n\n'
+        yield f'data: {json_lib.dumps({"choices": [{"delta": {}, "finish_reason": "stop"}]})}\n\n'
         yield 'data: [DONE]\n\n'
 
     return StreamingResponse(stream_answer(), media_type="text/event-stream")

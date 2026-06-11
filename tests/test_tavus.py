@@ -17,6 +17,15 @@ def make_mock_response(status_code: int, json_data: dict) -> MagicMock:
     return mock_resp
 
 
+def make_async_stream(texts):
+    async def gen():
+        for t in texts:
+            chunk = MagicMock()
+            chunk.text = t
+            yield chunk
+    return gen()
+
+
 # ── /tavus/session ────────────────────────────────────────
 @patch("main.httpx.AsyncClient")
 def test_tavus_session_success(mock_httpx_class):
@@ -98,14 +107,14 @@ def test_tavus_end_success(mock_httpx_class):
 # ── /tavus/llm ────────────────────────────────────────────
 @patch("main.collection")
 @patch("main.client")
-def test_tavus_llm_success(mock_client, mock_collection):
+def test_tavus_llm_streams_chunks(mock_client, mock_collection):
     mock_collection.query.return_value = {
         "documents": [["KIT Prüfungsanmeldung erfolgt über das Campus-Portal."]],
         "distances": [[0.3]]
     }
-    mock_response = MagicMock()
-    mock_response.text = "Prüfungen werden im Campus-Portal unter campus.kit.edu angemeldet."
-    mock_client.models.generate_content.return_value = mock_response
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=make_async_stream(["Prüfungen meldest du ", "über campus.kit.edu an."])
+    )
 
     response = test_client.post("/tavus/llm", json={
         "messages": [{"role": "user", "content": "Wie melde ich mich für Prüfungen an?"}],
@@ -115,9 +124,17 @@ def test_tavus_llm_success(mock_client, mock_collection):
     assert response.status_code == 200
     assert "text/event-stream" in response.headers.get("content-type", "")
     body = response.text
-    assert "data:" in body
     assert "[DONE]" in body
     assert "campus.kit.edu" in body
+    # Echtes Streaming: zwei getrennte content-Deltas
+    import json as j
+    deltas = [
+        j.loads(line[5:])["choices"][0]["delta"].get("content")
+        for line in body.split("\n\n")
+        if line.strip().startswith("data:") and "[DONE]" not in line
+    ]
+    assert "Prüfungen meldest du " in deltas
+    assert "über campus.kit.edu an." in deltas
 
 
 # ── /tavus/message ────────────────────────────────────────
@@ -199,18 +216,17 @@ def test_tavus_llm_uses_kira_persona(mock_client, mock_collection):
         "documents": [["KIT Prüfungsanmeldung über das Campus-Portal."]],
         "distances": [[0.3]]
     }
-    mock_response = MagicMock()
-    mock_response.text = "Prüfungen meldest du über campus.kit.edu an."
-    mock_client.models.generate_content.return_value = mock_response
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=make_async_stream(["Prüfungen meldest du über campus.kit.edu an."])
+    )
 
     test_client.post("/tavus/llm", json={
         "messages": [{"role": "user", "content": "Wie melde ich Prüfungen an?"}],
         "stream": True
     })
 
-    call_args = mock_client.models.generate_content.call_args
-    prompt = call_args.kwargs.get("contents") or call_args.args[1]
-    assert isinstance(prompt, str) and len(prompt) > 0, f"Expected string prompt, got: {type(prompt)}"
+    prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
+    assert isinstance(prompt, str) and len(prompt) > 0
     assert "KIRA" in prompt
     assert "Karlsruher Institut für Technologie" in prompt
     assert "vorgelesen" in prompt or "Sprachausgabe" in prompt
@@ -224,17 +240,15 @@ def test_tavus_llm_context_limit_400(mock_client, mock_collection):
         "documents": [[long_doc]],
         "distances": [[0.3]]
     }
-    mock_response = MagicMock()
-    mock_response.text = "Antwort."
-    mock_client.models.generate_content.return_value = mock_response
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=make_async_stream(["Antwort."])
+    )
 
     test_client.post("/tavus/llm", json={
         "messages": [{"role": "user", "content": "Test"}],
         "stream": True
     })
 
-    call_args = mock_client.models.generate_content.call_args
-    prompt = call_args.kwargs.get("contents") or call_args.args[1]
-    # Verifies hard character truncation at 400, not word-boundary
+    prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
     assert "A" * 400 in prompt
     assert "A" * 401 not in prompt
