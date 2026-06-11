@@ -1003,59 +1003,102 @@ body {
     document.getElementById("sendBtn").disabled = true;
     document.getElementById("statusText").textContent = "denkt nach...";
 
-    if (avatarProvider === "tavus" && tavusCall && tavusConversationId) {
-      const typingId = showTyping();
-      try {
-        const res = await fetch(API_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text, session_id: sessionId })
-        });
-        removeTyping(typingId);
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => ({}));
-          throw new Error(errBody.detail || `HTTP ${res.status}`);
+    const typingId = showTyping();
+    let streamEl = null;
+
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, session_id: sessionId })
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.detail || `HTTP ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop();
+        for (const block of blocks) {
+          const line = block.trim();
+          if (!line.startsWith("data:")) continue;
+          let evt;
+          try { evt = JSON.parse(line.slice(5)); } catch (_) { continue; }
+
+          if (evt.type === "chunk") {
+            if (!streamEl) { removeTyping(typingId); streamEl = addStreamingMessage(); }
+            streamEl.content.textContent += evt.text;
+            const messages = document.getElementById("messages");
+            messages.scrollTop = messages.scrollHeight;
+          } else if (evt.type === "done") {
+            if (!streamEl) { removeTyping(typingId); streamEl = addStreamingMessage(); }
+            const m = document.createElement("div");
+            m.className = "meta";
+            const cls = evt.source === "Wissensbasis" ? "wb" : "llm";
+            const ico = evt.source === "Wissensbasis" ? "📚" : "🧠";
+            m.innerHTML = `<span class="${cls}">${ico} ${evt.source}</span><span>${evt.latency_ms}ms</span>`;
+            streamEl.bubble.appendChild(m);
+            speakAnswer(evt.voice_text);
+            markUnread();
+          } else if (evt.type === "error") {
+            removeTyping(typingId);
+            showError(evt.message);
+          }
         }
-        const data = await res.json();
-        addMessage("bot", data.answer, { source: data.source, latency_ms: data.latency_ms });
-        // Avatar spricht exakt denselben Text; dedup damit utterance-Event nicht doppelt zeigt
-        pendingEchoReplies.add(data.answer);
+      }
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      removeTyping(typingId);
+      document.getElementById("sendBtn").disabled = false;
+      document.getElementById("statusText").textContent = "bereit";
+    }
+  }
+
+  function addStreamingMessage() {
+    const messages = document.getElementById("messages");
+    const msg = document.createElement("div");
+    msg.className = "msg bot";
+    const icon = document.createElement("div");
+    icon.className = "msg-icon";
+    icon.textContent = "🎓";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    const label = document.createElement("div");
+    label.className = "role-label";
+    label.textContent = "KIRA";
+    const content = document.createElement("div");
+    bubble.appendChild(label);
+    bubble.appendChild(content);
+    msg.appendChild(icon);
+    msg.appendChild(bubble);
+    messages.appendChild(msg);
+    messages.scrollTop = messages.scrollHeight;
+    return { content, bubble };
+  }
+
+  function speakAnswer(voiceText) {
+    if (!voiceText) return;
+    if (avatarProvider === "tavus") {
+      if (tavusCall && tavusConversationId) {
+        pendingEchoReplies.add(voiceText);
         tavusCall.sendAppMessage({
           message_type: "conversation",
           event_type: "conversation.echo",
           conversation_id: tavusConversationId,
-          properties: { modality: "text", text: data.answer }
+          properties: { modality: "text", text: voiceText }
         }, "*");
-      } catch (err) {
-        removeTyping(typingId);
-        showError(err.message);
-      } finally {
-        document.getElementById("sendBtn").disabled = false;
-        document.getElementById("statusText").textContent = "bereit";
       }
     } else {
-      const typingId = showTyping();
-      try {
-        const res = await fetch(API_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text, session_id: sessionId })
-        });
-        removeTyping(typingId);
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => ({}));
-          throw new Error(errBody.detail || `HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        addMessage("bot", data.answer, { source: data.source, latency_ms: data.latency_ms });
-        await avatarSpeak(data.answer);
-      } catch (err) {
-        removeTyping(typingId);
-        showError(err.message);
-      } finally {
-        document.getElementById("sendBtn").disabled = false;
-        document.getElementById("statusText").textContent = "bereit";
-      }
+      avatarSpeak(voiceText);
     }
   }
 
