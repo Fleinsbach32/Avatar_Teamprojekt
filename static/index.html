@@ -1004,7 +1004,11 @@ body {
   }
 
   document.getElementById("userInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (document.getElementById("sendBtn").disabled) return; // kein Doppel-Send während Stream
+      sendMessage();
+    }
   });
 
   document.getElementById("userInput").addEventListener("input", function () {
