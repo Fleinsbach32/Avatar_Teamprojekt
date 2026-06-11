@@ -95,6 +95,9 @@ Es gibt zwei getrennte Antwort-Pfade bei Tavus:
   — mit ~30 % Wahrscheinlichkeit der Voice-Version vorangestellt
   (nie der Chat-Version).
 - Keine Filler bei kurzen Antworten (< 15 Wörter).
+- Filler gelten **nur für den getippten Pfad** (`/chat`), wo die Voice-Version
+  vollständig vorliegt. `/tavus/llm` bleibt reines Streaming — die
+  <15-Wörter-Regel wäre dort nur mit Pufferung (= Latenzverlust) prüfbar.
 - Session-State merkt sich das erste Wort der letzten Voice-Antwort; der
   Voice-Prompt erhält die Anweisung, nicht mit demselben Wort zu beginnen.
 
