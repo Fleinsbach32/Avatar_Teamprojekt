@@ -118,6 +118,17 @@ def opening_instruction(session_id: str) -> str:
         return ""
     return f'\n\nBeginne deine Antwort nicht mit dem Wort "{last}".'
 
+# ── Gemini-Konfiguration ──────────────────────────────────
+# thinking_budget=0: Gemini 2.5 Flash denkt sonst intern nach, was gegen
+# max_output_tokens zählt und Antworten mitten im Satz abschneidet.
+def gemini_config(max_tokens: int) -> types.GenerateContentConfig:
+    return types.GenerateContentConfig(
+        temperature=0.2,
+        max_output_tokens=max_tokens,
+        thinking_config=types.ThinkingConfig(thinking_budget=0),
+    )
+
+
 # ── Voice-Antwort (parallel zur Chat-Antwort) ─────────────
 VOICE_RETRY_DELAY = 2
 
@@ -129,7 +140,7 @@ async def generate_voice_answer(prompt: str) -> str:
             response = await client.aio.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=300),
+                config=gemini_config(300),
             )
             return (response.text or "").strip()
         except Exception as e:
@@ -395,7 +406,7 @@ Frage: {user_message}"""
                 stream = await client.aio.models.generate_content_stream(
                     model="gemini-2.5-flash",
                     contents=prompt,
-                    config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=300),
+                    config=gemini_config(300),
                 )
                 async for chunk in stream:
                     if chunk.text:
@@ -455,7 +466,7 @@ Frage: {user_input}"""
                 stream = await client.aio.models.generate_content_stream(
                     model="gemini-2.5-flash",
                     contents=chat_prompt,
-                    config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=500),
+                    config=gemini_config(500),
                 )
                 async for chunk in stream:
                     if chunk.text:
