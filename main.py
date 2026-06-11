@@ -2,6 +2,7 @@ import os
 import time
 import logging
 import asyncio
+from contextlib import asynccontextmanager
 import httpx
 import chromadb
 from chromadb.utils import embedding_functions
@@ -32,9 +33,17 @@ KIRA_PROMPT = KIRA_PERSONA + """
 Antwortregeln (Text wird angezeigt und vorgelesen):
 Antworte in zwei bis drei Sätzen, warm und natürlich, wie in einem echten Gespräch unter Studierenden. Geh mit einem halben Satz auf die Situation der Person ein, bevor du die Information gibst — echtes Verständnis statt Floskeln. Schreibe Zahlen und Daten aus (fünfzehnter Januar statt 15.01., zweiundzwanzig Prozent statt 22%). Keine Abkürzungen (schreibe "das heißt" statt "d.h.", "zum Beispiel" statt "z.B."), keine Klammern, keine Listen. Variiere Satzbau und Antwortaufbau von Antwort zu Antwort, damit du nie mechanisch klingst. Natürlicher Gesprächsrhythmus, klingt wie gesprochen."""
 
-KIRA_GREETING = "Hallo, ich bin KIRA, deine Studienberaterin am KIT. Womit kann ich dir helfen?"
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Warmup: erste echte Anfrage soll nicht den Kaltstart der Embedding-Pipeline zahlen
+    try:
+        collection.query(query_texts=["Warmup"], n_results=1)
+    except Exception as e:
+        logging.warning(f"ChromaDB Warmup fehlgeschlagen: {e}")
+    yield
 
-app = FastAPI()
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,16 +63,10 @@ collection = chroma_client.get_or_create_collection(
 )
 client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-@app.on_event("startup")
-async def warmup_chromadb():
-    """Erste echte Anfrage soll nicht den Kaltstart der Embedding-Pipeline zahlen."""
-    try:
-        collection.query(query_texts=["Warmup"], n_results=1)
-    except Exception as e:
-        logging.warning(f"ChromaDB Warmup fehlgeschlagen: {e}")
-
 # ── Session Memory ────────────────────────────────────────
+SESSION_TTL_SECONDS = 1800  # Sessions nach 30 Minuten Inaktivität aufräumen
 sessions = {}
+session_last_seen = {}
 
 # ── RAG-Helper ────────────────────────────────────────────
 def build_rag_context(query: str) -> tuple[str, str, float]:
@@ -78,7 +81,7 @@ def build_rag_context(query: str) -> tuple[str, str, float]:
     if beste_distanz < 0.45:
         anweisung = "Beantworte die Frage ausschließlich auf Basis des folgenden Kontexts aus der KIT-Wissensdatenbank."
     else:
-        anweisung = "Nutze allgemeines Hochschulwissen und ergänze am Ende: \"Das ist eine allgemeine Info — am besten beim zuständigen Prüfungsamt oder Studiengangskoordinator bestätigen.\""
+        anweisung = "Nutze allgemeines Hochschulwissen. Nur wenn es um verbindliche Fristen oder offizielle Regelungen geht, empfiehl beiläufig eine kurze Bestätigung beim Prüfungsamt — nicht in jeder Antwort und jedes Mal anders formuliert."
     return kontext, anweisung, beste_distanz
 
 # ── Natürlichkeit: Satzanfang-Variation ──────────────────
@@ -97,6 +100,17 @@ def opening_instruction(session_id: str) -> str:
         return ""
     return f'\n\nBeginne deine Antwort nicht mit dem Wort "{last}".'
 
+
+def touch_session(session_id: str) -> None:
+    """Merkt den Zugriff und räumt abgelaufene Sessions auf (verhindert unbegrenztes Wachstum)."""
+    now = time.time()
+    session_last_seen[session_id] = now
+    abgelaufen = [sid for sid, t in session_last_seen.items() if now - t > SESSION_TTL_SECONDS]
+    for sid in abgelaufen:
+        session_last_seen.pop(sid, None)
+        sessions.pop(sid, None)
+        voice_openings.pop(sid, None)
+
 # ── Gemini-Konfiguration ──────────────────────────────────
 # thinking_budget=0: Gemini 2.5 Flash denkt sonst intern nach, was gegen
 # max_output_tokens zählt und Antworten mitten im Satz abschneidet.
@@ -110,6 +124,9 @@ def gemini_config(max_tokens: int) -> types.GenerateContentConfig:
 
 # ── Retry-Delay für /tavus/llm ────────────────────────────
 VOICE_RETRY_DELAY = 2
+
+# Verhindert Pufferung des SSE-Streams durch Proxies (z.B. ngrok/nginx)
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 # ── Avatar Provider Config ────────────────────────────────
 @app.get("/avatar/config")
@@ -246,10 +263,6 @@ class TavusMessageRequest(BaseModel):
             raise ValueError("message must not be empty")
         return v
 
-class TavusLLMMessage(BaseModel):
-    role: str
-    content: str
-
 class TavusLLMRequest(BaseModel):
     messages: list
     stream: bool = True
@@ -271,7 +284,9 @@ async def tavus_session():
             "Antworte auf Deutsch, freundlich und präzise. "
             "Bei offiziellen Daten verweise auf campus.kit.edu."
         ),
-        "custom_greeting": KIRA_GREETING,
+        # Leerer String unterdrückt die Tavus-Standardbegrüßung —
+        # die Begrüßung kommt verzögert vom Frontend (3 s nach Verbindungsaufbau)
+        "custom_greeting": "",
     }
     if persona_id:
         body["persona_id"] = persona_id
@@ -348,9 +363,16 @@ async def tavus_llm(request: TavusLLMRequest):
         async def empty_stream():
             yield f'data: {json_lib.dumps({"choices":[{"delta":{},"finish_reason":"stop"}]})}\n\n'
             yield 'data: [DONE]\n\n'
-        return StreamingResponse(empty_stream(), media_type="text/event-stream")
+        return StreamingResponse(empty_stream(), media_type="text/event-stream", headers=SSE_HEADERS)
 
-    kontext, kontext_anweisung, _ = build_rag_context(user_message)
+    kontext, kontext_anweisung, _ = await asyncio.to_thread(build_rag_context, user_message)
+
+    # Vorherige Gesprächszüge aus dem Tavus-Verlauf (ohne die aktuelle Frage)
+    verlauf = "\n".join(
+        f"{'Du' if m.get('role') == 'user' else 'KIRA'}: {m.get('content', '')}"
+        for m in request.messages[:-1][-6:]
+        if m.get("role") in ("user", "assistant") and m.get("content")
+    )
 
     prompt = f"""{KIRA_PROMPT}
 
@@ -358,6 +380,9 @@ async def tavus_llm(request: TavusLLMRequest):
 
 Kontext:
 {kontext}
+
+Gesprächsverlauf:
+{verlauf}
 
 Frage: {user_message}"""
 
@@ -386,7 +411,7 @@ Frage: {user_message}"""
         yield f'data: {json_lib.dumps({"choices": [{"delta": {}, "finish_reason": "stop"}]})}\n\n'
         yield 'data: [DONE]\n\n'
 
-    return StreamingResponse(stream_answer(), media_type="text/event-stream")
+    return StreamingResponse(stream_answer(), media_type="text/event-stream", headers=SSE_HEADERS)
 
 
 # ── Chat Endpoint (SSE-Streaming, einheitliche Ausgabe) ───
@@ -395,11 +420,12 @@ async def chat(request: ChatRequest):
     session_id = request.session_id
     user_input = request.message
 
+    touch_session(session_id)
     if session_id not in sessions:
         sessions[session_id] = []
     chat_history = sessions[session_id]
 
-    kontext, kontext_anweisung, beste_distanz = build_rag_context(user_input)
+    kontext, kontext_anweisung, beste_distanz = await asyncio.to_thread(build_rag_context, user_input)
     verlauf = "\n".join(f"{m['role']}: {m['content']}" for m in chat_history[-4:])
 
     prompt = f"""{KIRA_PROMPT}{opening_instruction(session_id)}
@@ -449,7 +475,7 @@ Frage: {user_input}"""
         }
         yield f'data: {json_lib.dumps(done_event)}\n\n'
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=SSE_HEADERS)
 
 @app.get("/health")
 def health():

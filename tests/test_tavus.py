@@ -29,7 +29,6 @@ def make_async_stream(texts):
 # ── /tavus/session ────────────────────────────────────────
 @patch("main.httpx.AsyncClient")
 def test_tavus_session_success(mock_httpx_class):
-    import main as main_module
     mock_http = AsyncMock()
     mock_http.post.return_value = make_mock_response(200, {
         "conversation_id": "conv_abc123",
@@ -41,8 +40,7 @@ def test_tavus_session_success(mock_httpx_class):
     with patch.dict(os.environ, {
         "TAVUS_API_KEY": "real-key",
         "TAVUS_REPLICA_ID": "replica_xyz",
-        "TAVUS_PERSONA_ID": "",
-        "BASE_URL": "http://localhost:8000"
+        "TAVUS_PERSONA_ID": ""
     }):
         response = test_client.post("/tavus/session")
 
@@ -54,7 +52,8 @@ def test_tavus_session_success(mock_httpx_class):
     call_kwargs = mock_http.post.call_args.kwargs
     assert call_kwargs["headers"]["x-api-key"] == "real-key"
     assert call_kwargs["json"]["replica_id"] == "replica_xyz"
-    assert call_kwargs["json"]["custom_greeting"] == main_module.KIRA_GREETING
+    # Tavus-Standardbegrüßung unterdrücken — die verzögerte Begrüßung kommt vom Frontend
+    assert call_kwargs["json"]["custom_greeting"] == ""
 
 
 def test_tavus_session_missing_api_key():
@@ -136,6 +135,84 @@ def test_tavus_llm_streams_chunks(mock_client, mock_collection):
     ]
     assert "Prüfungen meldest du " in deltas
     assert "über campus.kit.edu an." in deltas
+    # Anti-Proxy-Buffering-Header für SSE
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.headers["x-accel-buffering"] == "no"
+
+
+def make_failing_stream(texts, exc):
+    async def gen():
+        for t in texts:
+            chunk = MagicMock()
+            chunk.text = t
+            yield chunk
+        raise exc
+    return gen()
+
+
+@patch("main.collection")
+@patch("main.client")
+def test_tavus_llm_includes_conversation_history(mock_client, mock_collection):
+    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=make_async_stream(["Antwort."])
+    )
+
+    test_client.post("/tavus/llm", json={
+        "messages": [
+            {"role": "user", "content": "Was ist die Bewerbungsfrist?"},
+            {"role": "assistant", "content": "Die Frist ist der fünfzehnte Juli."},
+            {"role": "user", "content": "Und wo reiche ich das ein?"}
+        ],
+        "stream": True
+    })
+
+    prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
+    # Vorherige Gesprächszüge müssen im Prompt stehen
+    assert "Was ist die Bewerbungsfrist?" in prompt
+    assert "Die Frist ist der fünfzehnte Juli." in prompt
+    # Die aktuelle Frage steht am Ende
+    assert prompt.rstrip().endswith("Und wo reiche ich das ein?")
+
+
+@patch("main.VOICE_RETRY_DELAY", 0)
+@patch("main.collection")
+@patch("main.client")
+def test_tavus_llm_fallback_after_failures(mock_client, mock_collection):
+    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
+    mock_client.aio.models.generate_content_stream = AsyncMock(side_effect=RuntimeError("boom"))
+
+    response = test_client.post("/tavus/llm", json={
+        "messages": [{"role": "user", "content": "Test"}],
+        "stream": True
+    })
+
+    body = response.text
+    # json.dumps escapt Umlaute, daher Teilstring ohne Umlaut prüfen
+    assert "Service momentan nicht verf" in body
+    assert "[DONE]" in body
+    # Genau 3 Versuche
+    assert mock_client.aio.models.generate_content_stream.call_count == 3
+
+
+@patch("main.VOICE_RETRY_DELAY", 0)
+@patch("main.collection")
+@patch("main.client")
+def test_tavus_llm_no_retry_after_first_chunk(mock_client, mock_collection):
+    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        side_effect=lambda **kwargs: make_failing_stream(["Teil eins"], RuntimeError("boom"))
+    )
+
+    response = test_client.post("/tavus/llm", json={
+        "messages": [{"role": "user", "content": "Test"}],
+        "stream": True
+    })
+
+    # Mitten im Stream abgebrochen: KEIN Retry (sonst doppelter gesprochener Text)
+    assert mock_client.aio.models.generate_content_stream.call_count == 1
+    assert response.text.count("Teil eins") == 1
+    assert "[DONE]" in response.text
 
 
 # ── /tavus/message ────────────────────────────────────────
@@ -230,7 +307,7 @@ def test_tavus_llm_uses_kira_persona(mock_client, mock_collection):
     assert isinstance(prompt, str) and len(prompt) > 0
     assert "KIRA" in prompt
     assert "Karlsruher Institut für Technologie" in prompt
-    assert "vorgelesen" in prompt or "Sprachausgabe" in prompt
+    assert "vorgelesen" in prompt
 
 
 @patch("main.collection")

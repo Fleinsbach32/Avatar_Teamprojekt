@@ -17,7 +17,7 @@ Das Skript prüft die `.env`, befüllt die ChromaDB beim ersten Start und starte
 1. Python-Abhängigkeiten: `pip install -r requirements.txt` (oder `.\setup.ps1`)
 2. `.env` aus `.env.example` kopieren und mindestens `GOOGLE_API_KEY` setzen.
 3. Avatar-Provider in `.env` wählen: `AVATAR_PROVIDER=heygen | anam | tavus`
-   - Bei `tavus`: zusätzlich `TAVUS_API_KEY`, `TAVUS_REPLICA_ID` setzen. Für den gesprochenen Pfad muss `BASE_URL` öffentlich erreichbar sein (lokal: `ngrok http 8000`, dann die ngrok-URL eintragen).
+   - Bei `tavus`: zusätzlich `TAVUS_API_KEY`, `TAVUS_REPLICA_ID` setzen. Für den gesprochenen Pfad muss der Server öffentlich erreichbar sein (lokal: `ngrok http 8000`); die ngrok-URL + `/tavus/llm` wird im **Tavus-Dashboard in der Persona** als Custom-LLM-URL hinterlegt — nicht in der `.env`.
 
 ## Architektur
 

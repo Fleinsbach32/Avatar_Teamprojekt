@@ -642,6 +642,11 @@ body {
   const API_URL   = "/chat";
   const sessionId = "session_" + Math.random().toString(36).substr(2, 9);
 
+  // ── Begrüßung (verzögert nach Avatar-Verbindung) ──────
+  const KIRA_GREETING = "Hallo, ich bin KIRA, deine Studienberaterin am KIT. Womit kann ich dir helfen?";
+  const GREETING_DELAY_MS = 3000;
+  let greetingSent = false;
+
   // ── Idle-Follow-up ───────────────────────────────────
   const IDLE_FOLLOWUP_MS = 30000;
   const IDLE_FOLLOWUP_TEXT = "Kann ich dir noch bei etwas helfen?";
@@ -673,9 +678,7 @@ body {
   let avatarProvider = "heygen";
   let anamClient = null;
   const avatarAudio = document.getElementById("avatarAudio");
-  const pendingTypedMessages = new Set();
   const pendingEchoReplies = new Set();
-  let tavusTypingId = null;
 
   // Provider aus Backend laden
   fetch("/avatar/config")
@@ -815,6 +818,17 @@ body {
           avatarPH.style.display = "none";
           document.getElementById("statusText").textContent = "bereit";
           document.getElementById("statusDot").className = "status-dot";
+          // Begrüßung verzögert, damit der Avatar erst sichtbar ist, bevor er spricht
+          if (!greetingSent) {
+            greetingSent = true;
+            setTimeout(() => {
+              if (!tavusCall) return; // inzwischen getrennt
+              openChat();
+              addMessage("bot", KIRA_GREETING);
+              speakAnswer(KIRA_GREETING);
+              startIdleTimer();
+            }, GREETING_DELAY_MS);
+          }
         }
         if (e.track.kind === "audio") {
           avatarAudio.srcObject = new MediaStream([e.track]);
@@ -823,18 +837,12 @@ body {
 
       tavusCall.on("transcription-message", (e) => {
         if (!e.is_final) return;
+        if (!e.text || !e.text.trim()) return;
         openChat();
         if (e.role === "user") {
-          const key = e.text.toLowerCase().trim();
-          if (!key) return;
-          if (pendingTypedMessages.has(key)) {
-            pendingTypedMessages.delete(key);
-            return;
-          }
           addMessage("user", e.text);
           resetIdleTimer();
         } else if (e.role === "assistant") {
-          if (tavusTypingId) { removeTyping(tavusTypingId); tavusTypingId = null; }
           document.getElementById("sendBtn").disabled = false;
           document.getElementById("statusText").textContent = "bereit";
           addMessage("bot", e.text);
@@ -843,8 +851,8 @@ body {
       });
 
       tavusCall.on("left-meeting", () => {
-        pendingTypedMessages.clear();
-        tavusTypingId = null;
+        pendingEchoReplies.clear();
+        greetingSent = false;
         avatarVideo.style.display = "none";
         avatarPH.style.display = "flex";
         avatarLabel.textContent = "Verbindung getrennt";

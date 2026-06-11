@@ -119,3 +119,45 @@ def test_chat_second_request_varies_opening(mock_client, mock_collection):
 
     prompt_2 = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
     assert 'Beginne deine Antwort nicht mit dem Wort "Genau"' in prompt_2
+
+
+def make_failing_stream(texts, exc):
+    async def gen():
+        for t in texts:
+            chunk = MagicMock()
+            chunk.text = t
+            yield chunk
+        raise exc
+    return gen()
+
+
+@patch("main.collection")
+@patch("main.client")
+def test_chat_sse_headers_prevent_proxy_buffering(mock_client, mock_collection):
+    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=make_async_stream(["Hi."])
+    )
+
+    response = test_client.post("/chat", json={"message": "Test", "session_id": "s_hdr"})
+
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.headers["x-accel-buffering"] == "no"
+
+
+@patch("main.collection")
+@patch("main.client")
+def test_chat_midstream_failure_no_done_no_history(mock_client, mock_collection):
+    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=make_failing_stream(["Teil eins "], RuntimeError("boom"))
+    )
+
+    response = test_client.post("/chat", json={"message": "Test", "session_id": "s_mid"})
+
+    events = sse_events(response.text)
+    assert any(e["type"] == "chunk" for e in events)
+    assert any(e["type"] == "error" for e in events)
+    assert not any(e["type"] == "done" for e in events)
+    # Fehlgeschlagene Antwort darf nicht im Verlauf landen
+    assert main.sessions.get("s_mid", []) == []

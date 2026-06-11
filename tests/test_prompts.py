@@ -1,6 +1,7 @@
 import os
 os.environ.setdefault("GOOGLE_API_KEY", "test-key")
 
+import time
 import main
 from unittest.mock import patch
 
@@ -67,3 +68,28 @@ def test_remember_and_instruct_opening():
 
 def test_no_instruction_without_history():
     assert main.opening_instruction("s_never_used") == ""
+
+
+def test_fallback_instruction_not_always_disclaiming():
+    """Der Prüfungsamt-Hinweis darf nicht als Pflicht-Anhang formuliert sein."""
+    with patch("main.collection") as mock_collection:
+        mock_collection.query.return_value = {
+            "documents": [["Irrelevant"]],
+            "distances": [[0.9]]
+        }
+        _, anweisung, _ = main.build_rag_context("Testfrage")
+    assert "ergänze am Ende" not in anweisung
+    assert "nicht in jeder Antwort" in anweisung
+
+
+def test_session_ttl_eviction():
+    main.sessions["s_alt"] = [{"role": "Du", "content": "x"}]
+    main.voice_openings["s_alt"] = "Hallo"
+    main.session_last_seen["s_alt"] = time.time() - main.SESSION_TTL_SECONDS - 1
+
+    main.touch_session("s_neu")
+
+    assert "s_alt" not in main.sessions
+    assert "s_alt" not in main.voice_openings
+    assert "s_alt" not in main.session_last_seen
+    assert "s_neu" in main.session_last_seen
