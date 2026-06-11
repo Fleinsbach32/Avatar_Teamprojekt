@@ -67,7 +67,7 @@ sessions = {}
 
 # ── RAG-Helper ────────────────────────────────────────────
 def build_rag_context(query: str) -> tuple[str, str, float]:
-    """Eine ChromaDB-Abfrage, geteilt von Chat- und Voice-Prompt."""
+    """Eine ChromaDB-Abfrage für den Prompt-Kontext (von /chat und /tavus/llm genutzt)."""
     results = collection.query(
         query_texts=[query],
         n_results=3,
