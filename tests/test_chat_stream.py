@@ -129,3 +129,21 @@ def test_chat_history_stored(mock_client, mock_collection):
     history = main.sessions["s_hist"]
     assert {"role": "Du", "content": "Frage A"} in history
     assert any(m["role"] == "Bot" and "Antwort A." in m["content"] for m in history)
+
+
+@patch("main.collection")
+@patch("main.client")
+def test_chat_second_request_varies_opening(mock_client, mock_collection):
+    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        side_effect=lambda **kwargs: make_async_stream(["Antwort."])
+    )
+    mock_client.aio.models.generate_content = AsyncMock(
+        return_value=MagicMock(text="Genau, das ist richtig.")
+    )
+
+    test_client.post("/chat", json={"message": "Frage eins", "session_id": "s_vary"})
+    test_client.post("/chat", json={"message": "Frage zwei", "session_id": "s_vary"})
+
+    voice_prompt_2 = mock_client.aio.models.generate_content.call_args.kwargs["contents"]
+    assert 'Beginne deine Antwort nicht mit dem Wort "Genau"' in voice_prompt_2

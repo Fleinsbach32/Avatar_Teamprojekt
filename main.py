@@ -3,6 +3,7 @@ import time
 import logging
 import asyncio
 import random
+import contextlib
 import httpx
 import chromadb
 from chromadb.utils import embedding_functions
@@ -432,46 +433,50 @@ Frage: {user_input}"""
     async def event_stream():
         t1 = time.time()
         voice_task = asyncio.ensure_future(generate_voice_answer(voice_prompt))
-        chat_parts = []
         try:
-            stream = await client.aio.models.generate_content_stream(
-                model="gemini-2.5-flash",
-                contents=chat_prompt,
-                config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=500),
-            )
-            async for chunk in stream:
-                if chunk.text:
-                    chat_parts.append(chunk.text)
-                    yield f'data: {json_lib.dumps({"type": "chunk", "text": chunk.text})}\n\n'
-        except Exception as e:
-            logging.warning(f"/chat Gemini Fehler: {e}")
+            chat_parts = []
+            try:
+                stream = await client.aio.models.generate_content_stream(
+                    model="gemini-2.5-flash",
+                    contents=chat_prompt,
+                    config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=500),
+                )
+                async for chunk in stream:
+                    if chunk.text:
+                        chat_parts.append(chunk.text)
+                        yield f'data: {json_lib.dumps({"type": "chunk", "text": chunk.text})}\n\n'
+            except Exception as e:
+                logging.warning(f"/chat Gemini Fehler: {e}")
+                yield f'data: {json_lib.dumps({"type": "error", "message": "Service momentan nicht verfügbar."})}\n\n'
+                return
+
+            chat_answer = "".join(chat_parts).strip()
+            try:
+                voice_answer = await voice_task
+            except Exception as e:
+                logging.warning(f"/chat Voice Fehler, Fallback auf Chat-Text: {e}")
+                voice_answer = chat_answer
+            if not voice_answer:
+                voice_answer = chat_answer
+
+            remember_opening(session_id, voice_answer)
+            voice_answer = maybe_add_filler(voice_answer)
+
+            sessions[session_id].append({"role": "Du", "content": user_input})
+            sessions[session_id].append({"role": "Bot", "content": chat_answer})
+
+            done_event = {
+                "type": "done",
+                "voice_text": voice_answer,
+                "source": quelle,
+                "latency_ms": round((time.time() - t1) * 1000),
+                "session_id": session_id,
+            }
+            yield f'data: {json_lib.dumps(done_event)}\n\n'
+        finally:
             voice_task.cancel()
-            yield f'data: {json_lib.dumps({"type": "error", "message": "Service momentan nicht verfügbar."})}\n\n'
-            return
-
-        chat_answer = "".join(chat_parts).strip()
-        try:
-            voice_answer = await voice_task
-        except Exception as e:
-            logging.warning(f"/chat Voice Fehler, Fallback auf Chat-Text: {e}")
-            voice_answer = chat_answer
-        if not voice_answer:
-            voice_answer = chat_answer
-
-        voice_answer = maybe_add_filler(voice_answer)
-        remember_opening(session_id, voice_answer)
-
-        sessions[session_id].append({"role": "Du", "content": user_input})
-        sessions[session_id].append({"role": "Bot", "content": chat_answer})
-
-        done_event = {
-            "type": "done",
-            "voice_text": voice_answer,
-            "source": quelle,
-            "latency_ms": round((time.time() - t1) * 1000),
-            "session_id": session_id,
-        }
-        yield f'data: {json_lib.dumps(done_event)}\n\n'
+            with contextlib.suppress(Exception, asyncio.CancelledError):
+                await voice_task
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
