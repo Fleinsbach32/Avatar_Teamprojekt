@@ -39,6 +39,11 @@ KIRA_VOICE_PROMPT = KIRA_PERSONA + """
 Antwortregeln (Sprachausgabe, wird vorgelesen):
 Antworte in maximal 2 Sätzen — kurz und präzise. Schreibe Zahlen und Daten aus (fünfzehnter Januar statt 15.01., zweiundzwanzig Prozent statt 22%). Keine Abkürzungen (schreibe "das heißt" statt "d.h.", "zum Beispiel" statt "z.B."). Keine Klammern, keine Listen. Natürlicher Gesprächsrhythmus, klingt wie gesprochen."""
 
+KIRA_PROMPT = KIRA_PERSONA + """
+
+Antwortregeln (Text wird angezeigt und vorgelesen):
+Antworte in zwei bis drei Sätzen, warm und natürlich, wie in einem echten Gespräch unter Studierenden. Geh mit einem halben Satz auf die Situation der Person ein, bevor du die Information gibst — echtes Verständnis statt Floskeln. Schreibe Zahlen und Daten aus (fünfzehnter Januar statt 15.01., zweiundzwanzig Prozent statt 22%). Keine Abkürzungen (schreibe "das heißt" statt "d.h.", "zum Beispiel" statt "z.B."), keine Klammern, keine Listen. Variiere Satzbau und Antwortaufbau von Antwort zu Antwort, damit du nie mechanisch klingst. Natürlicher Gesprächsrhythmus, klingt wie gesprochen."""
+
 KIRA_GREETING = "Hallo, ich bin KIRA, deine Studienberaterin am KIT. Womit kann ich dir helfen?"
 
 app = FastAPI()
@@ -390,7 +395,7 @@ async def tavus_llm(request: TavusLLMRequest):
 
     kontext, kontext_anweisung, _ = build_rag_context(user_message)
 
-    prompt = f"""{KIRA_VOICE_PROMPT}
+    prompt = f"""{KIRA_PROMPT}
 
 {kontext_anweisung}
 
