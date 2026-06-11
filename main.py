@@ -59,6 +59,22 @@ client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 # ── Session Memory ────────────────────────────────────────
 sessions = {}
 
+# ── RAG-Helper ────────────────────────────────────────────
+def build_rag_context(query: str) -> tuple[str, str, float]:
+    """Eine ChromaDB-Abfrage, geteilt von Chat- und Voice-Prompt."""
+    results = collection.query(
+        query_texts=[query],
+        n_results=3,
+        include=["documents", "distances"]
+    )
+    beste_distanz = results["distances"][0][0] if results["distances"][0] else 1.0
+    kontext = "\n\n".join(doc[:400] for doc in results["documents"][0])
+    if beste_distanz < 0.45:
+        anweisung = "Beantworte die Frage ausschließlich auf Basis des folgenden Kontexts aus der KIT-Wissensdatenbank."
+    else:
+        anweisung = "Nutze allgemeines Hochschulwissen und ergänze am Ende: \"Das ist eine allgemeine Info — am besten beim zuständigen Prüfungsamt oder Studiengangskoordinator bestätigen.\""
+    return kontext, anweisung, beste_distanz
+
 # ── Avatar Provider Config ────────────────────────────────
 @app.get("/avatar/config")
 def avatar_config():
@@ -297,18 +313,7 @@ async def tavus_llm(request: TavusLLMRequest):
             yield 'data: [DONE]\n\n'
         return StreamingResponse(empty_stream(), media_type="text/event-stream")
 
-    results = collection.query(
-        query_texts=[user_message],
-        n_results=3,
-        include=["documents", "distances"]
-    )
-    beste_distanz = results["distances"][0][0] if results["distances"][0] else 1.0
-    kontext = "\n\n".join([doc[:400] for doc in results["documents"][0]])
-
-    if beste_distanz < 0.45:
-        kontext_anweisung = "Beantworte die Frage ausschließlich auf Basis des folgenden Kontexts aus der KIT-Wissensdatenbank."
-    else:
-        kontext_anweisung = "Nutze allgemeines Hochschulwissen und ergänze am Ende: \"Das ist eine allgemeine Info — am besten beim zuständigen Prüfungsamt oder Studiengangskoordinator bestätigen.\""
+    kontext, kontext_anweisung, beste_distanz = build_rag_context(user_message)
 
     prompt = f"""{KIRA_VOICE_PROMPT}
 
@@ -353,20 +358,7 @@ async def chat(request: ChatRequest):
 
     chat_history = sessions[session_id]
 
-    # ChromaDB Suche
-    results = collection.query(
-        query_texts=[user_input],
-        n_results=3,
-        include=["documents", "distances"]
-    )
-
-    beste_distanz = results["distances"][0][0] if results["distances"][0] else 1.0
-    kontext = "\n\n".join([doc[:400] for doc in results["documents"][0]])
-
-    if beste_distanz < 0.45:
-        kontext_anweisung = "Beantworte die Frage ausschließlich auf Basis des folgenden Kontexts aus der KIT-Wissensdatenbank."
-    else:
-        kontext_anweisung = "Nutze allgemeines Hochschulwissen und ergänze am Ende: \"Das ist eine allgemeine Info — am besten beim zuständigen Prüfungsamt oder Studiengangskoordinator bestätigen.\""
+    kontext, kontext_anweisung, beste_distanz = build_rag_context(user_input)
 
     prompt = f"""{KIRA_CHAT_PROMPT}
 
