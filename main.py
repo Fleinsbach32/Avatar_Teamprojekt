@@ -39,6 +39,8 @@ KIRA_VOICE_PROMPT = KIRA_PERSONA + """
 Antwortregeln (Sprachausgabe, wird vorgelesen):
 Antworte in maximal 2 Sätzen — kurz und präzise. Schreibe Zahlen und Daten aus (fünfzehnter Januar statt 15.01., zweiundzwanzig Prozent statt 22%). Keine Abkürzungen (schreibe "das heißt" statt "d.h.", "zum Beispiel" statt "z.B."). Keine Klammern, keine Listen. Natürlicher Gesprächsrhythmus, klingt wie gesprochen."""
 
+KIRA_GREETING = "Hallo, ich bin KIRA, deine Studienberaterin am KIT. Womit kann ich dir helfen?"
+
 app = FastAPI()
 
 app.add_middleware(
@@ -58,6 +60,14 @@ collection = chroma_client.get_or_create_collection(
     embedding_function=embedding_fn
 )
 client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+@app.on_event("startup")
+async def warmup_chromadb():
+    """Erste echte Anfrage soll nicht den Kaltstart der Embedding-Pipeline zahlen."""
+    try:
+        collection.query(query_texts=["Warmup"], n_results=1)
+    except Exception as e:
+        logging.warning(f"ChromaDB Warmup fehlgeschlagen: {e}")
 
 # ── Session Memory ────────────────────────────────────────
 sessions = {}
@@ -288,6 +298,7 @@ async def tavus_session():
             "Antworte auf Deutsch, freundlich und präzise. "
             "Bei offiziellen Daten verweise auf campus.kit.edu."
         ),
+        "custom_greeting": KIRA_GREETING,
     }
     if persona_id:
         body["persona_id"] = persona_id

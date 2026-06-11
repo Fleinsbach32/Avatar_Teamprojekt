@@ -29,6 +29,7 @@ def make_async_stream(texts):
 # ── /tavus/session ────────────────────────────────────────
 @patch("main.httpx.AsyncClient")
 def test_tavus_session_success(mock_httpx_class):
+    import main as main_module
     mock_http = AsyncMock()
     mock_http.post.return_value = make_mock_response(200, {
         "conversation_id": "conv_abc123",
@@ -53,7 +54,7 @@ def test_tavus_session_success(mock_httpx_class):
     call_kwargs = mock_http.post.call_args.kwargs
     assert call_kwargs["headers"]["x-api-key"] == "real-key"
     assert call_kwargs["json"]["replica_id"] == "replica_xyz"
-    assert "llm_websocket_url" in call_kwargs["json"]["custom_llm_extra_body"]
+    assert call_kwargs["json"]["custom_greeting"] == main_module.KIRA_GREETING
 
 
 def test_tavus_session_missing_api_key():
