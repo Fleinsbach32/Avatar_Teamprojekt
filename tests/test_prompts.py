@@ -59,3 +59,43 @@ def test_build_rag_context_truncates_docs_at_400(mock_collection):
     kontext, _, _ = main.build_rag_context("Testfrage")
     assert "C" * 400 in kontext
     assert "C" * 401 not in kontext
+
+
+class FakeRng:
+    def __init__(self, random_value, choice_index=0):
+        self.random_value = random_value
+        self.choice_index = choice_index
+
+    def random(self):
+        return self.random_value
+
+    def choice(self, seq):
+        return seq[self.choice_index]
+
+
+LONG_TEXT = ("Dies ist eine sehr lange Antwort mit deutlich mehr als "
+             "fünfzehn einzelnen Wörtern damit die Filler Logik hier greift.")
+
+
+def test_filler_added_for_long_answers():
+    result = main.maybe_add_filler(LONG_TEXT, rng=FakeRng(0.1, choice_index=0))
+    assert result == f"{main.FILLERS[0]} {LONG_TEXT}"
+
+
+def test_no_filler_when_random_above_threshold():
+    assert main.maybe_add_filler(LONG_TEXT, rng=FakeRng(0.9)) == LONG_TEXT
+
+
+def test_no_filler_for_short_answers():
+    short = "Kurze Antwort ohne Filler."
+    assert main.maybe_add_filler(short, rng=FakeRng(0.1)) == short
+
+
+def test_remember_and_instruct_opening():
+    main.remember_opening("s_open_test", "Genau, das stimmt so.")
+    instr = main.opening_instruction("s_open_test")
+    assert '"Genau"' in instr
+
+
+def test_no_instruction_without_history():
+    assert main.opening_instruction("s_never_used") == ""

@@ -1,6 +1,8 @@
 import os
 import time
 import logging
+import asyncio
+import random
 import httpx
 import chromadb
 from chromadb.utils import embedding_functions
@@ -74,6 +76,36 @@ def build_rag_context(query: str) -> tuple[str, str, float]:
     else:
         anweisung = "Nutze allgemeines Hochschulwissen und ergänze am Ende: \"Das ist eine allgemeine Info — am besten beim zuständigen Prüfungsamt oder Studiengangskoordinator bestätigen.\""
     return kontext, anweisung, beste_distanz
+
+# ── Natürlichkeit: Filler & Satzanfang-Variation ──────────
+FILLERS = ["Gute Frage.", "Lass mich kurz nachdenken.", "Also,"]
+FILLER_PROBABILITY = 0.3
+FILLER_MIN_WORDS = 15
+
+voice_openings = {}  # session_id -> erstes Wort der letzten Voice-Antwort
+
+
+def maybe_add_filler(voice_text: str, rng=None) -> str:
+    """Stellt mit ~30% Wahrscheinlichkeit einen Filler voran — nur bei langen Antworten."""
+    rng = rng or random
+    if len(voice_text.split()) < FILLER_MIN_WORDS:
+        return voice_text
+    if rng.random() < FILLER_PROBABILITY:
+        return f"{rng.choice(FILLERS)} {voice_text}"
+    return voice_text
+
+
+def remember_opening(session_id: str, voice_text: str) -> None:
+    words = voice_text.split()
+    if words:
+        voice_openings[session_id] = words[0].strip(".,!?")
+
+
+def opening_instruction(session_id: str) -> str:
+    last = voice_openings.get(session_id)
+    if not last:
+        return ""
+    return f'\n\nBeginne deine Antwort nicht mit dem Wort "{last}".'
 
 # ── Avatar Provider Config ────────────────────────────────
 @app.get("/avatar/config")
