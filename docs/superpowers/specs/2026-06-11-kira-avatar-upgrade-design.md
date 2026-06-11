@@ -82,7 +82,7 @@ Es gibt zwei getrennte Antwort-Pfade bei Tavus:
 
 ## 4. Idle-Follow-up
 
-- Client-seitiger Timer (45 s), startet nach jeder abgeschlossenen Bot-Antwort.
+- Client-seitiger Timer (30 s), startet nach jeder abgeschlossenen Bot-Antwort.
 - Bei Ablauf: "Kann ich dir noch bei etwas helfen?" als Chat-Bubble + Echo an
   Tavus (falls verbunden).
 - Reset bei Tastatureingabe oder Senden.
