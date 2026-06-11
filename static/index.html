@@ -573,7 +573,7 @@ body {
   <div id="messages">
     <div class="empty-state" id="emptyState">
       <div class="empty-icon">💬</div>
-      <p>Willkommen bei KIRA.<br>Ich beantworte Ihre Fragen rund um das Studium am KIT.</p>
+      <p>Hallo, ich bin KIRA, deine Studienberaterin am KIT.<br>Womit kann ich dir helfen?</p>
       <div class="chips-row" id="chipsRow">
         <div class="chip" onclick="quickSend('Wie melde ich mich für Prüfungen an?')">Prüfungsanmeldung</div>
         <div class="chip" onclick="quickSend('Wann ist die Bewerbungsfrist?')">Bewerbungsfristen</div>
@@ -641,6 +641,28 @@ body {
 
   const API_URL   = "/chat";
   const sessionId = "session_" + Math.random().toString(36).substr(2, 9);
+
+  // ── Idle-Follow-up ───────────────────────────────────
+  const IDLE_FOLLOWUP_MS = 30000;
+  const IDLE_FOLLOWUP_TEXT = "Kann ich dir noch bei etwas helfen?";
+  let idleTimer = null;
+  let idleFired = false;
+
+  function startIdleTimer() {
+    clearTimeout(idleTimer);
+    if (idleFired) return; // maximal einmal pro Stille-Fenster
+    idleTimer = setTimeout(() => {
+      idleFired = true;
+      addMessage("bot", IDLE_FOLLOWUP_TEXT);
+      speakAnswer(IDLE_FOLLOWUP_TEXT);
+    }, IDLE_FOLLOWUP_MS);
+  }
+
+  function resetIdleTimer() {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+    idleFired = false;
+  }
 
   const ttsBtn      = document.getElementById("ttsBtn");
   const avatarVideo  = document.getElementById("avatarVideo");
@@ -781,6 +803,7 @@ body {
         } else if (role === "replica") {
           if (pendingEchoReplies.has(speech)) { pendingEchoReplies.delete(speech); return; }
           addMessage("bot", speech);
+          startIdleTimer();
         }
       });
 
@@ -809,11 +832,13 @@ body {
             return;
           }
           addMessage("user", e.text);
+          resetIdleTimer();
         } else if (e.role === "assistant") {
           if (tavusTypingId) { removeTyping(tavusTypingId); tavusTypingId = null; }
           document.getElementById("sendBtn").disabled = false;
           document.getElementById("statusText").textContent = "bereit";
           addMessage("bot", e.text);
+          startIdleTimer();
         }
       });
 
@@ -983,6 +1008,7 @@ body {
   });
 
   document.getElementById("userInput").addEventListener("input", function () {
+    resetIdleTimer();
     this.style.height = "auto";
     this.style.height = Math.min(this.scrollHeight, 120) + "px";
   });
@@ -991,6 +1017,7 @@ body {
     const input = document.getElementById("userInput");
     const text  = input.value.trim();
     if (!text) return;
+    resetIdleTimer();
 
     input.value = "";
     input.style.height = "auto";
@@ -1048,6 +1075,7 @@ body {
             streamEl.bubble.appendChild(m);
             speakAnswer(evt.voice_text);
             markUnread();
+            startIdleTimer();
           } else if (evt.type === "error") {
             removeTyping(typingId);
             showError(evt.message);
