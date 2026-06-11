@@ -36,30 +36,30 @@ def test_chat_streams_chunks_then_done(mock_client, mock_collection):
         "distances": [[0.3]]
     }
     mock_client.aio.models.generate_content_stream = AsyncMock(
-        return_value=make_async_stream(["Die Frist ", "ist der 15. Juli."])
+        return_value=make_async_stream(["Die Frist ", "ist der fünfzehnte Juli."])
     )
-    # Voice-Antwort hat < 15 Wörter -> garantiert kein Filler, deterministisch
-    mock_client.aio.models.generate_content = AsyncMock(
-        return_value=MagicMock(text="Die Frist ist der fünfzehnte Juli.")
-    )
+    mock_client.aio.models.generate_content = AsyncMock()
 
-    response = test_client.post("/chat", json={"message": "Frist?", "session_id": "s_stream1"})
+    response = test_client.post("/chat", json={"message": "Frist?", "session_id": "s_uni1"})
 
     assert response.status_code == 200
     assert "text/event-stream" in response.headers["content-type"]
     events = sse_events(response.text)
     chunks = [e for e in events if e["type"] == "chunk"]
     dones = [e for e in events if e["type"] == "done"]
-    assert [c["text"] for c in chunks] == ["Die Frist ", "ist der 15. Juli."]
+    assert [c["text"] for c in chunks] == ["Die Frist ", "ist der fünfzehnte Juli."]
     assert len(dones) == 1
+    # Text und Sprache identisch: voice_text == zusammengesetzte Chunks
     assert dones[0]["voice_text"] == "Die Frist ist der fünfzehnte Juli."
     assert dones[0]["source"] == "Wissensbasis"
     assert isinstance(dones[0]["latency_ms"], int)
+    # Nur EIN Gemini-Call — kein zweiter Voice-Call
+    assert mock_client.aio.models.generate_content.call_count == 0
 
 
 @patch("main.collection")
 @patch("main.client")
-def test_chat_dual_prompts_share_context(mock_client, mock_collection):
+def test_chat_single_call_with_context(mock_client, mock_collection):
     mock_collection.query.return_value = {
         "documents": [["EINDEUTIGER_KONTEXT_42"]],
         "distances": [[0.3]]
@@ -67,38 +67,15 @@ def test_chat_dual_prompts_share_context(mock_client, mock_collection):
     mock_client.aio.models.generate_content_stream = AsyncMock(
         return_value=make_async_stream(["Antwort."])
     )
-    mock_client.aio.models.generate_content = AsyncMock(
-        return_value=MagicMock(text="Antwort.")
-    )
+    mock_client.aio.models.generate_content = AsyncMock()
 
-    test_client.post("/chat", json={"message": "Test", "session_id": "s_dual"})
+    test_client.post("/chat", json={"message": "Test", "session_id": "s_single"})
 
-    chat_prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
-    voice_prompt = mock_client.aio.models.generate_content.call_args.kwargs["contents"]
-    assert "EINDEUTIGER_KONTEXT_42" in chat_prompt
-    assert "EINDEUTIGER_KONTEXT_42" in voice_prompt
-    assert "vorgelesen" not in chat_prompt
-    assert "vorgelesen" in voice_prompt
-    # Nur EINE ChromaDB-Abfrage für beide Prompts
+    prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
+    assert "EINDEUTIGER_KONTEXT_42" in prompt
+    assert "vorgelesen" in prompt
+    assert mock_client.aio.models.generate_content.call_count == 0
     assert mock_collection.query.call_count == 1
-
-
-@patch("main.VOICE_RETRY_DELAY", 0)
-@patch("main.collection")
-@patch("main.client")
-def test_chat_voice_fallback_on_error(mock_client, mock_collection):
-    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
-    mock_client.aio.models.generate_content_stream = AsyncMock(
-        return_value=make_async_stream(["Chat-Antwort."])
-    )
-    mock_client.aio.models.generate_content = AsyncMock(side_effect=RuntimeError("boom"))
-
-    response = test_client.post("/chat", json={"message": "Test", "session_id": "s_fallback"})
-
-    events = sse_events(response.text)
-    done = next(e for e in events if e["type"] == "done")
-    # Voice-Call kaputt -> voice_text fällt auf Chat-Antwort zurück
-    assert done["voice_text"] == "Chat-Antwort."
 
 
 @patch("main.collection")
@@ -106,9 +83,8 @@ def test_chat_voice_fallback_on_error(mock_client, mock_collection):
 def test_chat_error_event_on_stream_failure(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(side_effect=RuntimeError("boom"))
-    mock_client.aio.models.generate_content = AsyncMock(return_value=MagicMock(text="Voice."))
 
-    response = test_client.post("/chat", json={"message": "Test", "session_id": "s_err"})
+    response = test_client.post("/chat", json={"message": "Test", "session_id": "s_err2"})
 
     events = sse_events(response.text)
     assert any(e["type"] == "error" for e in events)
@@ -122,11 +98,10 @@ def test_chat_history_stored(mock_client, mock_collection):
     mock_client.aio.models.generate_content_stream = AsyncMock(
         return_value=make_async_stream(["Antwort A."])
     )
-    mock_client.aio.models.generate_content = AsyncMock(return_value=MagicMock(text="Antwort A."))
 
-    test_client.post("/chat", json={"message": "Frage A", "session_id": "s_hist"})
+    test_client.post("/chat", json={"message": "Frage A", "session_id": "s_hist2"})
 
-    history = main.sessions["s_hist"]
+    history = main.sessions["s_hist2"]
     assert {"role": "Du", "content": "Frage A"} in history
     assert any(m["role"] == "Bot" and "Antwort A." in m["content"] for m in history)
 
@@ -136,14 +111,11 @@ def test_chat_history_stored(mock_client, mock_collection):
 def test_chat_second_request_varies_opening(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
-        side_effect=lambda **kwargs: make_async_stream(["Antwort."])
-    )
-    mock_client.aio.models.generate_content = AsyncMock(
-        return_value=MagicMock(text="Genau, das ist richtig.")
+        side_effect=lambda **kwargs: make_async_stream(["Genau, das ist richtig."])
     )
 
-    test_client.post("/chat", json={"message": "Frage eins", "session_id": "s_vary"})
-    test_client.post("/chat", json={"message": "Frage zwei", "session_id": "s_vary"})
+    test_client.post("/chat", json={"message": "Frage eins", "session_id": "s_vary2"})
+    test_client.post("/chat", json={"message": "Frage zwei", "session_id": "s_vary2"})
 
-    voice_prompt_2 = mock_client.aio.models.generate_content.call_args.kwargs["contents"]
-    assert 'Beginne deine Antwort nicht mit dem Wort "Genau"' in voice_prompt_2
+    prompt_2 = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
+    assert 'Beginne deine Antwort nicht mit dem Wort "Genau"' in prompt_2

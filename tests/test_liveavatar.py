@@ -161,21 +161,17 @@ def test_chat_uses_kira_persona(mock_client, mock_collection):
         "distances": [[0.3]]
     }
     mock_client.aio.models.generate_content_stream = AsyncMock(
-        return_value=make_async_stream(["Die Bewerbungsfrist ist am 15. Juli."])
-    )
-    mock_client.aio.models.generate_content = AsyncMock(
-        return_value=MagicMock(text="Die Bewerbungsfrist ist am fünfzehnten Juli.")
+        return_value=make_async_stream(["Die Bewerbungsfrist ist am fünfzehnten Juli."])
     )
 
-    test_client.post("/chat", json={"message": "Wann ist die Bewerbungsfrist?", "session_id": "test_persona"})
+    test_client.post("/chat", json={"message": "Wann ist die Bewerbungsfrist?", "session_id": "test_persona2"})
 
     prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
     assert isinstance(prompt, str) and len(prompt) > 0
     assert "KIRA" in prompt
     assert "Karlsruher Institut für Technologie" in prompt
-    # /chat darf KEINE Sprach-Anweisungen enthalten
-    assert "vorgelesen" not in prompt
-    assert "Sprachausgabe" not in prompt
+    # Einheitlicher Prompt: Sprechregeln sind jetzt Teil des /chat-Prompts
+    assert "vorgelesen" in prompt
 
 
 @patch("main.collection")
@@ -189,7 +185,6 @@ def test_chat_context_limit_400(mock_client, mock_collection):
     mock_client.aio.models.generate_content_stream = AsyncMock(
         return_value=make_async_stream(["Antwort."])
     )
-    mock_client.aio.models.generate_content = AsyncMock(return_value=MagicMock(text="Antwort."))
 
     test_client.post("/chat", json={"message": "Test", "session_id": "test_limit"})
 
