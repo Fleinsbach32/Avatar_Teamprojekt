@@ -27,6 +27,10 @@ Folgeaufrufe überspringen bereits erledigte Schritte automatisch.
 - Die Sprache (Deutsch/Englisch) wird über den Umschalter oben rechts im UI gewählt; sie steuert sowohl die UI-Texte als auch die Antwortsprache von KIRA.
 - Über das Studiengang-Dropdown lässt sich die Wissensbasis auf das jeweilige Modulhandbuch filtern. Die Auswahl gilt für die laufende Session.
 
+## Bekannte Einschränkungen
+
+- **Voice-Pfad (Tavus) ignoriert Sprach- und Studiengang-Auswahl.** Der Endpoint `/tavus/llm` wird von Tavus CVI serverseitig aufgerufen, nicht vom Browser. Dabei werden die UI-Felder `lang` und `studiengang` nicht mitgesendet, sodass gesprochene Antworten derzeit immer auf Deutsch und ohne Studiengang-Filter erfolgen. Der Text-Chat (`/chat`) berücksichtigt beide Felder korrekt. Eine vollständige Verdrahtung des Voice-Pfads (z. B. über Session-State pro `conversation_id`) ist offen.
+
 ## Architektur
 
 - **Backend:** FastAPI im `app/`-Paket — RAG über ChromaDB + Google Gemini.
