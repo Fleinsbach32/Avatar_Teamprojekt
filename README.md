@@ -2,29 +2,42 @@
 
 ## Quick Start
 
-```bash
-# Windows
-.\start.ps1
-
-# Linux / Mac
-./start.sh
+```powershell
+.\run.ps1
 ```
 
-Das Skript prüft die `.env`, befüllt die ChromaDB beim ersten Start und startet den Server auf http://localhost:8000.
+`run.ps1` ist idempotent und übernimmt alles in einem Befehl:
+- prüft die `.env`
+- installiert beim ersten Aufruf ngrok und die Python-Abhängigkeiten
+- befüllt die ChromaDB beim ersten Start (`fill_db.py`)
+- startet ngrok im Hintergrund und gibt die öffentliche URL aus
+- startet den Server auf http://localhost:8000
+
+Folgeaufrufe überspringen bereits erledigte Schritte automatisch.
 
 ## Voraussetzungen
 
-1. Python-Abhängigkeiten: `pip install -r requirements.txt` (oder `.\setup.ps1`)
-2. `.env` aus `.env.example` kopieren und mindestens `GOOGLE_API_KEY` setzen.
-3. Avatar-Provider in `.env` wählen: `AVATAR_PROVIDER=heygen | anam | tavus`
-   - Bei `tavus`: zusätzlich `TAVUS_API_KEY`, `TAVUS_REPLICA_ID` setzen. Für den gesprochenen Pfad muss der Server öffentlich erreichbar sein (lokal: `ngrok http 8000`); die ngrok-URL + `/tavus/llm` wird im **Tavus-Dashboard in der Persona** als Custom-LLM-URL hinterlegt — nicht in der `.env`.
+1. `.env` aus `.env.example` kopieren und mindestens `GOOGLE_API_KEY` setzen.
+2. Für den Avatar (`AVATAR_PROVIDER=tavus`): zusätzlich `TAVUS_API_KEY` und `TAVUS_REPLICA_ID` setzen.
+   Für den gesprochenen Pfad muss der Server öffentlich erreichbar sein — `run.ps1` startet dafür automatisch ngrok.
+   Die ausgegebene ngrok-URL + `/tavus/llm` wird im **Tavus-Dashboard in der Persona** als Custom-LLM-URL hinterlegt — nicht in der `.env`.
+
+## Sprache & Studiengang
+
+- Die Sprache (Deutsch/Englisch) wird über den Umschalter oben rechts im UI gewählt; sie steuert sowohl die UI-Texte als auch die Antwortsprache von KIRA.
+- Über das Studiengang-Dropdown lässt sich die Wissensbasis auf das jeweilige Modulhandbuch filtern. Die Auswahl gilt für die laufende Session.
 
 ## Architektur
 
-- **Backend:** FastAPI (`main.py`) — RAG über ChromaDB + Google Gemini.
-  - `/chat`: SSE-Streaming, Dual-Prompt (Chat-Vollversion + natürliche Sprech-Version)
-  - `/tavus/llm`: OpenAI-kompatibles Streaming für Tavus CVI
-- **Frontend:** `static/index.html` — Chat-Panel + Avatar (Daily.co / LiveKit / Anam SDK)
+- **Backend:** FastAPI im `app/`-Paket — RAG über ChromaDB + Google Gemini.
+  - `app/main.py`: App-Wiring, Middleware, `/health`, Static-Files
+  - `app/routes/chat.py` → `/chat`: SSE-Streaming für den Text-Chat (Text-Prompt)
+  - `app/routes/tavus.py` → `/tavus/llm`: OpenAI-kompatibles Streaming für Tavus CVI (Voice-Prompt)
+  - `app/routes/avatar.py` → `/avatar/config`: Provider-Konfiguration
+  - `app/prompts.py`: getrennte Text- und Voice-Prompts (DE/EN) via `build_prompt(mode, lang)`
+  - `app/rag.py`: ChromaDB-Abfrage mit optionalem Studiengang-Filter
+  - `app/session.py`: In-Memory-Sessions
+- **Frontend:** `static/index.html` — Chat-Panel + Tavus-Avatar (Daily.co).
 - **Wissensbasis:** `fill_db.py` lädt `data/faq.json` + PDFs in ChromaDB.
 
 ## Tests
