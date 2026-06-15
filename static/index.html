@@ -551,7 +551,7 @@ body {
         <option value="digieco_msc">DigiEco</option>
       </optgroup>
     </select>
-    <button id="langToggle" onclick="toggleLang()" style="background:none; border:1px solid var(--border); border-radius:6px; padding:3px 10px; font-size:12px; cursor:pointer; color:var(--text-muted); font-family:var(--font); margin-right:8px; display:flex; align-items:center; gap:5px;">🇬🇧 EN</button>
+    <button id="langToggle" onclick="toggleLang()" style="background:none; border:1px solid var(--border); border-radius:6px; padding:3px 10px; font-size:12px; cursor:pointer; color:var(--text-muted); font-family:var(--font); margin-right:8px; display:flex; align-items:center; gap:6px;"></button>
     <div class="status-dot offline" id="statusDot"></div>
     <span class="status-text" id="statusText">verbinde...</span>
   </div>
@@ -698,10 +698,21 @@ body {
     if (recognition) recognition.lang = lang === "en" ? "en-US" : "de-DE";
   }
 
+  // Inline-SVG-Flaggen (Emoji-Flaggen werden unter Windows nicht gerendert).
+  const FLAG_SVG = {
+    de: '<svg width="20" height="14" viewBox="0 0 5 3" style="border-radius:2px;display:block"><rect width="5" height="1" y="0" fill="#000"/><rect width="5" height="1" y="1" fill="#D00"/><rect width="5" height="1" y="2" fill="#FFCE00"/></svg>',
+    en: '<svg width="20" height="14" viewBox="0 0 60 30" style="border-radius:2px;display:block"><clipPath id="ukclip"><rect width="60" height="30"/></clipPath><g clip-path="url(#ukclip)"><rect width="60" height="30" fill="#012169"/><path d="M0,0 60,30 M60,0 0,30" stroke="#fff" stroke-width="6"/><path d="M0,0 60,30 M60,0 0,30" stroke="#C8102E" stroke-width="4"/><path d="M30,0 V30 M0,15 H60" stroke="#fff" stroke-width="10"/><path d="M30,0 V30 M0,15 H60" stroke="#C8102E" stroke-width="6"/></g></svg>'
+  };
+
+  // Button zeigt die Zielsprache (zu der gewechselt würde) samt Flagge.
+  function setLangButton() {
+    const target = lang === "de" ? "en" : "de";
+    document.getElementById("langToggle").innerHTML = FLAG_SVG[target] + "<span>" + target.toUpperCase() + "</span>";
+  }
+
   function toggleLang() {
     lang = lang === "de" ? "en" : "de";
-    // Button zeigt die Zielsprache (zu der gewechselt würde) samt Flagge.
-    document.getElementById("langToggle").textContent = lang === "de" ? "🇬🇧 EN" : "🇩🇪 DE";
+    setLangButton();
     applyLang();
     pushVoicePrefs();
   }
@@ -1189,6 +1200,7 @@ body {
   }
 
   // ── Initiale Sprache anwenden ─────────────────────────
+  setLangButton();
   applyLang();
 </script>
 </body>
