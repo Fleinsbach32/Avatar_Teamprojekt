@@ -1,10 +1,10 @@
-# KIRA – Einziger Start-Befehl (idempotent)
+# KIRA - Einziger Start-Befehl (idempotent)
 # Erster Aufruf: installiert ngrok + pip-Pakete + ChromaDB
-# Folgeaufrufe: überspringt bereits abgeschlossene Schritte
+# Folgeaufrufe: ueberspringt bereits abgeschlossene Schritte
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-# ── 1. .env prüfen ────────────────────────────────────────
+# --- 1. .env pruefen --------------------------------------
 if (!(Test-Path ".env")) {
     Write-Host "FEHLER: .env fehlt. Kopiere .env.example zu .env und trage die Keys ein." -ForegroundColor Red
     exit 1
@@ -24,7 +24,7 @@ if (-not $env:GOOGLE_API_KEY -or $env:GOOGLE_API_KEY -eq "your_google_api_key_he
     exit 1
 }
 
-# ── 2. ngrok prüfen / installieren ───────────────────────
+# --- 2. ngrok pruefen / installieren ---------------------
 $ngrokDir = "$env:USERPROFILE\ngrok"
 $ngrokExe = "$ngrokDir\ngrok.exe"
 
@@ -47,7 +47,7 @@ if (-not $ngrokFound -and !(Test-Path $ngrokExe)) {
 
 $env:PATH = "$ngrokDir;" + [Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [Environment]::GetEnvironmentVariable("PATH", "Machine")
 
-# ── 3. ngrok Auth-Token prüfen ───────────────────────────
+# --- 3. ngrok Auth-Token pruefen -------------------------
 try {
     & ngrok config check *> $null
     if ($LASTEXITCODE -ne 0) { throw "no config" }
@@ -56,7 +56,7 @@ try {
     if ($token) { & ngrok config add-authtoken $token }
 }
 
-# ── 4. pip-Abhängigkeiten prüfen (Stamp-File) ────────────
+# --- 4. pip-Abhaengigkeiten pruefen (Stamp-File) ---------
 $stamp   = ".pip-stamp"
 $reqFile = "requirements.txt"
 $needPip = $true
@@ -76,14 +76,14 @@ if ($needPip) {
 
 $env:PYTHONIOENCODING = "utf-8"
 
-# ── 5. ChromaDB befüllen (einmalig) ──────────────────────
+# --- 5. ChromaDB befuellen (einmalig) --------------------
 if (!(Test-Path "chroma_db")) {
     Write-Host "ChromaDB wird befuellt (einmalig, kann mehrere Minuten dauern)..." -ForegroundColor Cyan
     python fill_db.py
     if ($LASTEXITCODE -ne 0) { Write-Host "FEHLER: fill_db.py fehlgeschlagen." -ForegroundColor Red; exit 1 }
 }
 
-# ── 6. ngrok starten (falls nicht schon aktiv) ───────────
+# --- 6. ngrok starten (falls nicht schon aktiv) ----------
 $ngrokActive = $false
 try {
     $null = Invoke-RestMethod "http://localhost:4040/api/tunnels" -ErrorAction Stop
@@ -107,9 +107,9 @@ try {
         Write-Host ""
     }
 } catch {
-    Write-Host "ngrok URL nicht abgerufen – manuell pruefen: http://localhost:4040" -ForegroundColor Yellow
+    Write-Host "ngrok URL nicht abgerufen - manuell pruefen: http://localhost:4040" -ForegroundColor Yellow
 }
 
-# ── 7. uvicorn starten ───────────────────────────────────
+# --- 7. uvicorn starten ----------------------------------
 Write-Host "KIRA startet auf http://localhost:8000 ..." -ForegroundColor Green
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
