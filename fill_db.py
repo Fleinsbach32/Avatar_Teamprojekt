@@ -76,12 +76,15 @@ for filename in os.listdir(PDF_FOLDER):
     pdf_count += 1
     print(f"📑 {filename}: {chunk_count} Chunks geladen")
 
-# ── 3. Alles in ChromaDB speichern ───────────────────────
-collection.upsert(
-    documents=documents,
-    ids=ids,
-    metadatas=metadatas
-)
+# ── 3. Alles in ChromaDB speichern (in 5000er-Batches) ───
+BATCH_SIZE = 5000
+for i in range(0, len(documents), BATCH_SIZE):
+    collection.upsert(
+        documents=documents[i:i + BATCH_SIZE],
+        ids=ids[i:i + BATCH_SIZE],
+        metadatas=metadatas[i:i + BATCH_SIZE]
+    )
+    print(f"   Batch {i // BATCH_SIZE + 1}: {min(i + BATCH_SIZE, len(documents))}/{len(documents)} gespeichert")
 
 print(f"\n✅ Gesamt in ChromaDB: {len(documents)} Einträge")
 print(f"   → {len(faqs)} FAQ + {chunk_count} PDF-Chunks")
