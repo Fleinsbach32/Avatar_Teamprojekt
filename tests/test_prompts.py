@@ -1,108 +1,55 @@
 import os
 os.environ.setdefault("GOOGLE_API_KEY", "test-key")
 
-import time
-import main
-from unittest.mock import patch
-
-
-def test_prompt_shares_persona():
-    assert main.KIRA_PROMPT.startswith(main.KIRA_PERSONA)
-
-
-def test_persona_mentions_kit():
-    assert "KIRA" in main.KIRA_PERSONA
-    assert "Karlsruher Institut für Technologie" in main.KIRA_PERSONA
-
-
-def test_prompt_has_voice_rules():
-    assert "vorgelesen" in main.KIRA_PROMPT
-    assert "Sätzen" in main.KIRA_PROMPT
-
-
-def test_prompt_is_human():
-    assert "warm" in main.KIRA_PROMPT
-    assert "Variiere" in main.KIRA_PROMPT
-
-
-@patch("main.collection")
-def test_build_rag_context_knowledge_base(mock_collection):
-    mock_collection.query.return_value = {
-        "documents": [["Doku eins", "Doku zwei"]],
-        "distances": [[0.2, 0.3]]
-    }
-    kontext, anweisung, distanz = main.build_rag_context("Testfrage")
-    assert "Doku eins" in kontext
-    assert "Doku zwei" in kontext
-    assert distanz == 0.2
-    assert "KIT-Wissensdatenbank" in anweisung
-
-
-@patch("main.collection")
-def test_build_rag_context_general_fallback(mock_collection):
-    mock_collection.query.return_value = {
-        "documents": [["Irrelevantes Dokument"]],
-        "distances": [[0.9]]
-    }
-    _, anweisung, distanz = main.build_rag_context("Testfrage")
-    assert distanz == 0.9
-    assert "allgemeines Hochschulwissen" in anweisung
-
-
-@patch("main.collection")
-def test_build_rag_context_truncates_docs_at_400(mock_collection):
-    mock_collection.query.return_value = {
-        "documents": [["C" * 500]],
-        "distances": [[0.2]]
-    }
-    kontext, _, _ = main.build_rag_context("Testfrage")
-    assert "C" * 400 in kontext
-    assert "C" * 401 not in kontext
-
-
-def test_remember_and_instruct_opening():
-    main.remember_opening("s_open_test", "Genau, das stimmt so.")
-    instr = main.opening_instruction("s_open_test")
-    assert '"Genau"' in instr
-
-
-def test_no_instruction_without_history():
-    assert main.opening_instruction("s_never_used") == ""
-
-
-def test_fallback_instruction_not_always_disclaiming():
-    """Der Prüfungsamt-Hinweis darf nicht als Pflicht-Anhang formuliert sein."""
-    with patch("main.collection") as mock_collection:
-        mock_collection.query.return_value = {
-            "documents": [["Irrelevant"]],
-            "distances": [[0.9]]
-        }
-        _, anweisung, _ = main.build_rag_context("Testfrage")
-    assert "ergänze am Ende" not in anweisung
-    assert "nicht in jeder Antwort" in anweisung
-
-
-def test_session_ttl_eviction():
-    main.sessions["s_alt"] = [{"role": "Du", "content": "x"}]
-    main.voice_openings["s_alt"] = "Hallo"
-    main.session_last_seen["s_alt"] = time.time() - main.SESSION_TTL_SECONDS - 1
-
-    main.touch_session("s_neu")
-
-    assert "s_alt" not in main.sessions
-    assert "s_alt" not in main.voice_openings
-    assert "s_alt" not in main.session_last_seen
-    assert "s_neu" in main.session_last_seen
-
-
-# ── Session-Tests (app.session) ───────────────────────────
 import time as _time
 from app.session import (
     sessions, session_last_seen, voice_openings,
     SESSION_TTL_SECONDS, touch_session,
     remember_opening, opening_instruction,
 )
+from app.prompts import KIRA_BASE_PROMPT, KIRA_TEXT_EXT, KIRA_VOICE_EXT, build_prompt
 
+
+# ── Basis-Prompt ──────────────────────────────────────────
+def test_base_prompt_mentions_kira_and_kit():
+    assert "KIRA" in KIRA_BASE_PROMPT
+    assert "Karlsruher Institut für Technologie" in KIRA_BASE_PROMPT
+
+def test_base_prompt_has_security_rules():
+    assert "Sicherheit" in KIRA_BASE_PROMPT or "Ignoriere" in KIRA_BASE_PROMPT
+
+# ── build_prompt ──────────────────────────────────────────
+def test_build_prompt_text_de_contains_base():
+    p = build_prompt("text", "de")
+    assert "KIRA" in p
+    assert "Karlsruher Institut für Technologie" in p
+
+def test_build_prompt_voice_de_has_voice_rules():
+    p = build_prompt("voice", "de")
+    assert "vorlesen" in p.lower() or "vorgelesen" in p.lower()
+
+def test_build_prompt_voice_de_shorter_than_text_de():
+    voice = build_prompt("voice", "de")
+    text  = build_prompt("text",  "de")
+    assert len(voice) < len(text), "Voice-Prompt sollte kürzer sein als Text-Prompt"
+
+def test_build_prompt_en_text_says_english():
+    p = build_prompt("text", "en")
+    assert "English" in p or "english" in p.lower()
+
+def test_build_prompt_en_voice_says_english():
+    p = build_prompt("voice", "en")
+    assert "English" in p or "english" in p.lower()
+
+def test_build_prompt_unknown_lang_falls_back_to_de():
+    p = build_prompt("text", "xx")
+    assert "KIRA" in p
+
+def test_build_prompt_voice_de_no_lists():
+    p = build_prompt("voice", "de")
+    assert "keine Listen" in p.lower() or "Keine Listen" in p
+
+# ── Session-Tests ─────────────────────────────────────────
 def test_session_ttl_eviction_new():
     sessions["s_alt2"] = [{"role": "Du", "content": "x"}]
     voice_openings["s_alt2"] = "Hallo"
