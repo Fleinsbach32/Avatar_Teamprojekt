@@ -183,9 +183,9 @@ def test_chat_studiengang_passes_filter_to_rag(mock_client, mock_collection):
     )
 
     test_client.post("/chat", json={
-        "message": "Was muss ich im WiInf BSc belegen?",
+        "message": "Was muss ich im WINFO BSc belegen?",
         "session_id": "s_sg",
-        "studiengang": "wiinf_bsc"
+        "studiengang": "winfo_bsc"
     })
 
     call_kwargs = mock_collection.query.call_args.kwargs

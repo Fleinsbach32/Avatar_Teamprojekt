@@ -538,18 +538,20 @@ body {
   <div class="header-right">
     <select id="studiengangSelect" onchange="onStudiengangChange(this.value)" style="border:1px solid var(--border); border-radius:6px; padding:3px 8px; font-size:12px; color:var(--text-muted); background:var(--surface); cursor:pointer; font-family:var(--font); max-width:140px; margin-right:6px;">
       <option value="">— Studiengang —</option>
-      <option value="wiwi_bsc">WiWi BSc</option>
-      <option value="wiwi_msc">WiWi MSc</option>
-      <option value="tvwl_bsc">TVWL BSc</option>
-      <option value="tvwl_msc">TVWL MSc</option>
-      <option value="wiinf_bsc">WiInf BSc</option>
-      <option value="wiinf_msc">WiInf MSc</option>
-      <option value="wiing_bsc">WiIng BSc</option>
-      <option value="wiing_msc">WiIng MSc</option>
-      <option value="wima_msc">WiMa MSc</option>
-      <option value="ieam_msc">IEAM MSc</option>
+      <optgroup label="Bachelor">
+        <option value="wing_bsc">WING</option>
+        <option value="winfo_bsc">WINFO</option>
+        <option value="digieco_bsc">DigiEco</option>
+      </optgroup>
+      <optgroup label="Master">
+        <option value="wing_msc">WING</option>
+        <option value="ieam_msc">Industrial Engineering and Management</option>
+        <option value="winfo_msc">WINFO</option>
+        <option value="wima_msc">WIMA</option>
+        <option value="digieco_msc">DigiEco</option>
+      </optgroup>
     </select>
-    <button id="langToggle" onclick="toggleLang()" style="background:none; border:1px solid var(--border); border-radius:6px; padding:3px 10px; font-size:12px; cursor:pointer; color:var(--text-muted); font-family:var(--font); margin-right:8px;">EN</button>
+    <button id="langToggle" onclick="toggleLang()" style="background:none; border:1px solid var(--border); border-radius:6px; padding:3px 10px; font-size:12px; cursor:pointer; color:var(--text-muted); font-family:var(--font); margin-right:8px; display:flex; align-items:center; gap:5px;">🇬🇧 EN</button>
     <div class="status-dot offline" id="statusDot"></div>
     <span class="status-text" id="statusText">verbinde...</span>
   </div>
@@ -698,8 +700,10 @@ body {
 
   function toggleLang() {
     lang = lang === "de" ? "en" : "de";
-    document.getElementById("langToggle").textContent = lang === "de" ? "EN" : "DE";
+    // Button zeigt die Zielsprache (zu der gewechselt würde) samt Flagge.
+    document.getElementById("langToggle").textContent = lang === "de" ? "🇬🇧 EN" : "🇩🇪 DE";
     applyLang();
+    pushVoicePrefs();
   }
 
   function getGreeting() { return (I18N[lang] || I18N.de).greeting; }
@@ -708,6 +712,19 @@ body {
   let currentStudiengang = null;
   function onStudiengangChange(val) {
     currentStudiengang = val || null;
+    pushVoicePrefs();
+  }
+
+  // Sprache/Studiengang an den Voice-Pfad melden, wenn ein Avatar-Gespräch läuft.
+  // Tavus ruft /tavus/llm serverseitig ohne UI-Kontext auf, daher muss das Backend
+  // die aktuelle Auswahl kennen.
+  function pushVoicePrefs() {
+    if (!tavusConversationId) return;
+    fetch("/tavus/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lang: lang, studiengang: currentStudiengang })
+    }).catch(() => {});
   }
 
   function openChat() {
@@ -833,7 +850,11 @@ body {
       tavusCall = null;
     }
     try {
-      const res = await fetch("/tavus/session", { method: "POST" });
+      const res = await fetch("/tavus/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang: lang, studiengang: currentStudiengang })
+      });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || "Session konnte nicht erstellt werden");

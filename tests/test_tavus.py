@@ -274,3 +274,56 @@ def test_tavus_llm_context_limit_400(mock_client, mock_collection):
     prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
     assert "A" * 400 in prompt
     assert "A" * 401 not in prompt
+
+
+# ── Voice-Prefs: /tavus/settings + Wirkung auf /tavus/llm ──
+def _reset_voice_prefs():
+    test_client.post("/tavus/settings", json={"lang": "de", "studiengang": None})
+
+
+def test_tavus_settings_updates_prefs():
+    r = test_client.post("/tavus/settings", json={"lang": "en", "studiengang": "wima_msc"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["lang"] == "en"
+    assert data["studiengang"] == "wima_msc"
+    _reset_voice_prefs()
+
+
+@patch("app.rag.collection")
+@patch("app.routes.tavus.client")
+def test_tavus_llm_uses_voice_prefs(mock_client, mock_collection):
+    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=make_async_stream(["Answer."])
+    )
+    # Frontend setzt Sprache + Studiengang vor dem Tavus-LLM-Aufruf
+    test_client.post("/tavus/settings", json={"lang": "en", "studiengang": "winfo_bsc"})
+    test_client.post("/tavus/llm", json={
+        "messages": [{"role": "user", "content": "Test"}],
+        "stream": True
+    })
+    # Studiengang-Filter aus den Prefs (nicht aus dem Request) angewendet
+    call_kwargs = mock_collection.query.call_args.kwargs
+    assert call_kwargs.get("where") == {"source": {"$in": ["mhb_wiinf_BSc_de_aktuell.pdf"]}}
+    # Englischer Voice-Prompt aus den Prefs
+    prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
+    assert "English" in prompt or "english" in prompt.lower()
+    _reset_voice_prefs()
+
+
+@patch("app.rag.collection")
+@patch("app.routes.tavus.client")
+def test_chat_completions_alias(mock_client, mock_collection):
+    """Tavus' OpenAI-Client ruft /chat/completions (an die ngrok-Root) auf."""
+    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=make_async_stream(["Hi."])
+    )
+    response = test_client.post("/chat/completions", json={
+        "messages": [{"role": "user", "content": "Test"}],
+        "stream": True
+    })
+    assert response.status_code == 200
+    assert "[DONE]" in response.text
+    _reset_voice_prefs()

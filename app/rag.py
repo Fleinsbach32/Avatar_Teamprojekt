@@ -14,16 +14,16 @@ collection = chroma_client.get_or_create_collection(
 )
 
 STUDIENGANG_FILES: dict[str, list[str]] = {
-    "wiwi_bsc":  ["mhb_de_BSc_de_aktuell.pdf"],
-    "wiwi_msc":  ["mhb_de_MSc_en_aktuell.pdf"],
-    "tvwl_bsc":  ["mhb_tvwl_BSc_de_aktuell.pdf"],
-    "tvwl_msc":  ["mhb_tvwl_MSc_de_aktuell.pdf"],
-    "wiinf_bsc": ["mhb_wiinf_BSc_de_aktuell.pdf"],
-    "wiinf_msc": ["mhb_wiinf_MSc_de_aktuell.pdf"],
-    "wiing_bsc": ["mhb_wiing_BSc_de_aktuell.pdf"],
-    "wiing_msc": ["mhb_wiing_MSc_de_aktuell.pdf"],
-    "wima_msc":  ["mhb_wima_MSc_de_aktuell.pdf"],
-    "ieam_msc":  ["mhb_ieam_MSc_en_aktuell.pdf"],
+    # Bachelor
+    "wing_bsc":    ["mhb_wiing_BSc_de_aktuell.pdf"],   # Wirtschaftsingenieurwesen
+    "winfo_bsc":   ["mhb_wiinf_BSc_de_aktuell.pdf"],   # Wirtschaftsinformatik
+    "digieco_bsc": ["mhb_de_BSc_de_aktuell.pdf"],      # Digital Economics
+    # Master
+    "wing_msc":    ["mhb_wiing_MSc_de_aktuell.pdf"],   # Wirtschaftsingenieurwesen
+    "ieam_msc":    ["mhb_ieam_MSc_en_aktuell.pdf"],    # Industrial Engineering and Management
+    "winfo_msc":   ["mhb_wiinf_MSc_de_aktuell.pdf"],   # Wirtschaftsinformatik
+    "wima_msc":    ["mhb_wima_MSc_de_aktuell.pdf"],     # Wirtschaftsmathematik
+    "digieco_msc": ["mhb_de_MSc_en_aktuell.pdf"],      # Digital Economics
 }
 
 

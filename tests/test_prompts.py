@@ -112,7 +112,7 @@ def test_build_rag_context_studiengang_filter():
             "distances": [[0.2]]
         }
         from app.rag import build_rag_context
-        build_rag_context("Testfrage", studiengang="wiinf_bsc")
+        build_rag_context("Testfrage", studiengang="winfo_bsc")
     call_kwargs = mock_collection.query.call_args.kwargs
     assert call_kwargs["where"] == {"source": {"$in": ["mhb_wiinf_BSc_de_aktuell.pdf"]}}
 

@@ -17,6 +17,32 @@ router = APIRouter()
 
 VOICE_RETRY_DELAY = 2
 
+# Aktive Voice-Einstellungen. Tavus ruft /tavus/llm serverseitig ohne UI-Kontext
+# auf, daher merken wir uns hier die zuletzt im Frontend gewählte Sprache und den
+# Studiengang. Bei lokalem Einzel-Session-Betrieb (ein Avatar gleichzeitig) genügt
+# ein globaler Zustand; das Frontend aktualisiert ihn bei Session-Start und bei
+# jeder Änderung von Sprache oder Studiengang.
+active_voice_prefs: dict = {"lang": "de", "studiengang": None}
+
+# Sprachabhängiger Gesprächskontext für die Tavus-Persona.
+_VOICE_CONTEXT = {
+    "de": (
+        "Du bist KIRA, Studienberaterin am KIT (Karlsruher Institut für Technologie). "
+        "Antworte auf Deutsch, freundlich und präzise. "
+        "Bei offiziellen Daten verweise auf campus.kit.edu."
+    ),
+    "en": (
+        "You are KIRA, an academic advisor at KIT (Karlsruhe Institute of Technology). "
+        "Answer in English, friendly and precise. "
+        "For official data, refer to campus.kit.edu."
+    ),
+}
+
+
+class TavusPrefsRequest(BaseModel):
+    lang: str = "de"
+    studiengang: str | None = None
+
 
 class TavusEndRequest(BaseModel):
     conversation_id: str
@@ -41,22 +67,30 @@ class TavusLLMRequest(BaseModel):
     studiengang: str | None = None
 
 
+@router.post("/tavus/settings")
+async def tavus_settings(prefs: TavusPrefsRequest):
+    """Aktualisiert Sprache/Studiengang für den laufenden Voice-Pfad."""
+    active_voice_prefs["lang"] = prefs.lang
+    active_voice_prefs["studiengang"] = prefs.studiengang
+    return {"status": "ok", **active_voice_prefs}
+
+
 @router.post("/tavus/session")
-async def tavus_session():
+async def tavus_session(prefs: TavusPrefsRequest | None = None):
     api_key = os.getenv("TAVUS_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="TAVUS_API_KEY nicht gesetzt")
+
+    prefs = prefs or TavusPrefsRequest()
+    active_voice_prefs["lang"] = prefs.lang
+    active_voice_prefs["studiengang"] = prefs.studiengang
 
     replica_id = os.getenv("TAVUS_REPLICA_ID", "")
     persona_id = os.getenv("TAVUS_PERSONA_ID", "")
 
     body: dict = {
         "replica_id": replica_id,
-        "conversational_context": (
-            "Du bist KIRA, Studienberaterin am KIT (Karlsruher Institut für Technologie). "
-            "Antworte auf Deutsch, freundlich und präzise. "
-            "Bei offiziellen Daten verweise auf campus.kit.edu."
-        ),
+        "conversational_context": _VOICE_CONTEXT.get(prefs.lang, _VOICE_CONTEXT["de"]),
         "custom_greeting": "",
     }
     if persona_id:
@@ -122,8 +156,12 @@ async def tavus_message(request: TavusMessageRequest):
             raise HTTPException(status_code=504, detail="Tavus API Timeout")
 
 
+# Tavus' OpenAI-kompatibler Client hängt "/chat/completions" an die im Dashboard
+# konfigurierte Custom-LLM-URL an. Wir registrieren mehrere Aliase, damit sowohl
+# eine Basis-URL mit "/tavus/llm" als auch die ngrok-Root funktioniert.
 @router.post("/tavus/llm")
 @router.post("/tavus/llm/chat/completions")
+@router.post("/chat/completions")
 async def tavus_llm(request: TavusLLMRequest):
     user_message = next(
         (m.get("content", "") for m in reversed(request.messages) if m.get("role") == "user"),
@@ -136,8 +174,13 @@ async def tavus_llm(request: TavusLLMRequest):
             yield 'data: [DONE]\n\n'
         return StreamingResponse(empty_stream(), media_type="text/event-stream", headers=SSE_HEADERS)
 
+    # Tavus sendet keine UI-Felder mit, daher kommen Sprache/Studiengang aus den
+    # zuletzt im Frontend gesetzten Voice-Einstellungen.
+    lang = active_voice_prefs["lang"]
+    studiengang = active_voice_prefs["studiengang"]
+
     kontext, kontext_anweisung, _ = await asyncio.to_thread(
-        build_rag_context, user_message, request.studiengang
+        build_rag_context, user_message, studiengang
     )
 
     verlauf = "\n".join(
@@ -146,7 +189,7 @@ async def tavus_llm(request: TavusLLMRequest):
         if m.get("role") in ("user", "assistant") and m.get("content")
     )
 
-    prompt = f"""{build_prompt("voice", request.lang)}
+    prompt = f"""{build_prompt("voice", lang)}
 
 {kontext_anweisung}
 
