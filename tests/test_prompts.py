@@ -66,3 +66,74 @@ def test_remember_and_instruct_opening_new():
 
 def test_no_instruction_without_history_new():
     assert opening_instruction("s_never2") == ""
+
+# ── RAG-Tests (app.rag) ───────────────────────────────────
+from unittest.mock import patch
+
+def test_build_rag_context_knowledge_base():
+    with patch("app.rag.collection") as mock_collection:
+        mock_collection.query.return_value = {
+            "documents": [["Doku eins", "Doku zwei"]],
+            "distances": [[0.2, 0.3]]
+        }
+        from app.rag import build_rag_context
+        kontext, anweisung, distanz = build_rag_context("Testfrage")
+    assert "Doku eins" in kontext
+    assert "Doku zwei" in kontext
+    assert distanz == 0.2
+    assert "KIT-Wissensdatenbank" in anweisung
+
+def test_build_rag_context_general_fallback():
+    with patch("app.rag.collection") as mock_collection:
+        mock_collection.query.return_value = {
+            "documents": [["Irrelevantes Dokument"]],
+            "distances": [[0.9]]
+        }
+        from app.rag import build_rag_context
+        _, anweisung, distanz = build_rag_context("Testfrage")
+    assert distanz == 0.9
+    assert "allgemeines Hochschulwissen" in anweisung
+
+def test_build_rag_context_truncates_docs_at_400():
+    with patch("app.rag.collection") as mock_collection:
+        mock_collection.query.return_value = {
+            "documents": [["C" * 500]],
+            "distances": [[0.2]]
+        }
+        from app.rag import build_rag_context
+        kontext, _, _ = build_rag_context("Testfrage")
+    assert "C" * 400 in kontext
+    assert "C" * 401 not in kontext
+
+def test_build_rag_context_studiengang_filter():
+    with patch("app.rag.collection") as mock_collection:
+        mock_collection.query.return_value = {
+            "documents": [["WiInf Dokument"]],
+            "distances": [[0.2]]
+        }
+        from app.rag import build_rag_context
+        build_rag_context("Testfrage", studiengang="wiinf_bsc")
+    call_kwargs = mock_collection.query.call_args.kwargs
+    assert call_kwargs["where"] == {"source": {"$in": ["mhb_wiinf_BSc_de_aktuell.pdf"]}}
+
+def test_build_rag_context_no_studiengang_no_filter():
+    with patch("app.rag.collection") as mock_collection:
+        mock_collection.query.return_value = {
+            "documents": [["Dok"]],
+            "distances": [[0.2]]
+        }
+        from app.rag import build_rag_context
+        build_rag_context("Testfrage", studiengang=None)
+    call_kwargs = mock_collection.query.call_args.kwargs
+    assert call_kwargs.get("where") is None
+
+def test_rag_fallback_no_disclaiming():
+    with patch("app.rag.collection") as mock_collection:
+        mock_collection.query.return_value = {
+            "documents": [["Irrelevant"]],
+            "distances": [[0.9]]
+        }
+        from app.rag import build_rag_context
+        _, anweisung, _ = build_rag_context("Testfrage")
+    assert "ergänze am Ende" not in anweisung
+    assert "nicht in jeder Antwort" in anweisung
