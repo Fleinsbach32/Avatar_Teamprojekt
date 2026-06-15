@@ -93,3 +93,29 @@ def test_session_ttl_eviction():
     assert "s_alt" not in main.voice_openings
     assert "s_alt" not in main.session_last_seen
     assert "s_neu" in main.session_last_seen
+
+
+# ── Session-Tests (app.session) ───────────────────────────
+import time as _time
+from app.session import (
+    sessions, session_last_seen, voice_openings,
+    SESSION_TTL_SECONDS, touch_session,
+    remember_opening, opening_instruction,
+)
+
+def test_session_ttl_eviction_new():
+    sessions["s_alt2"] = [{"role": "Du", "content": "x"}]
+    voice_openings["s_alt2"] = "Hallo"
+    session_last_seen["s_alt2"] = _time.time() - SESSION_TTL_SECONDS - 1
+    touch_session("s_neu2")
+    assert "s_alt2" not in sessions
+    assert "s_alt2" not in voice_openings
+    assert "s_neu2" in session_last_seen
+
+def test_remember_and_instruct_opening_new():
+    remember_opening("s_op2", "Genau, das stimmt so.")
+    instr = opening_instruction("s_op2")
+    assert '"Genau"' in instr
+
+def test_no_instruction_without_history_new():
+    assert opening_instruction("s_never2") == ""
