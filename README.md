@@ -27,9 +27,18 @@ Folgeaufrufe überspringen bereits erledigte Schritte automatisch.
 - Die Sprache (Deutsch/Englisch) wird über den Umschalter oben rechts im UI gewählt; sie steuert sowohl die UI-Texte als auch die Antwortsprache von KIRA.
 - Über das Studiengang-Dropdown lässt sich die Wissensbasis auf das jeweilige Modulhandbuch filtern. Die Auswahl gilt für die laufende Session.
 
-## Bekannte Einschränkungen
+## Voice-Pfad: Sprache & Studiengang
 
-- **Voice-Pfad (Tavus) ignoriert Sprach- und Studiengang-Auswahl.** Der Endpoint `/tavus/llm` wird von Tavus CVI serverseitig aufgerufen, nicht vom Browser. Dabei werden die UI-Felder `lang` und `studiengang` nicht mitgesendet, sodass gesprochene Antworten derzeit immer auf Deutsch und ohne Studiengang-Filter erfolgen. Der Text-Chat (`/chat`) berücksichtigt beide Felder korrekt. Eine vollständige Verdrahtung des Voice-Pfads (z. B. über Session-State pro `conversation_id`) ist offen.
+Tavus CVI ruft den Custom-LLM-Endpoint serverseitig auf und sendet dabei keine UI-Felder mit. Damit der gesprochene Pfad trotzdem die im UI gewählte Sprache und den Studiengang berücksichtigt, merkt sich das Backend die zuletzt gewählten Voice-Einstellungen (`active_voice_prefs` in [app/routes/tavus.py](app/routes/tavus.py)):
+
+- Beim Avatar-Start (`POST /tavus/session`) und bei jeder Änderung von Sprache oder Studiengang sendet das Frontend die aktuelle Auswahl an `POST /tavus/settings`.
+- `POST /tavus/llm` (bzw. die Aliase `/tavus/llm/chat/completions` und `/chat/completions`) liest Sprache und Studiengang aus diesen Einstellungen.
+
+**Einschränkung:** Der Zustand ist global, also für den lokalen Einzel-Session-Betrieb (ein Avatar gleichzeitig) ausgelegt. Bei mehreren parallelen Gesprächen würden sich die Einstellungen überschreiben.
+
+### Tavus-Dashboard
+
+Als Custom-LLM-URL kann entweder die ngrok-Root (`https://<id>.ngrok-free.dev`) oder die URL mit `/tavus/llm` hinterlegt werden — beide Varianten funktionieren, da `/chat/completions` zusätzlich auf der Root registriert ist.
 
 ## Architektur
 

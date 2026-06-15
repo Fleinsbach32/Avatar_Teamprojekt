@@ -16,13 +16,15 @@ KIRA ist eine Studienberatungs-Webanwendung mit zwei Eingabewegen:
    Video-Avatar (Tavus) hört zu und antwortet mit Stimme und Lippenbewegung.
 
 Beide Wege nutzen dieselbe Wissensbasis (RAG über ChromaDB) und dasselbe
-Sprachmodell (Google Gemini 2.5 Flash). **Text- und Sprachausgabe sind
-identisch**: Was im Chat steht, ist exakt das, was der Avatar spricht.
+Sprachmodell (Google Gemini 2.5 Flash). Der Text-Pfad nutzt einen Text-Prompt,
+der Voice-Pfad einen kürzeren, sprechoptimierten Voice-Prompt — beide in Deutsch
+oder Englisch (Sprachauswahl im UI). Optional lässt sich die Wissensbasis auf
+einen Studiengang (Modulhandbuch) einschränken.
 
 ```
 ┌──────────────┐   tippt    ┌──────────────────────────────┐
 │   Browser    │ ─────────▶ │  POST /chat (SSE-Stream)      │
-│ (index.html) │ ◀───────── │  FastAPI-Backend (main.py)    │
+│ (index.html) │ ◀───────── │  FastAPI-Backend (app/)       │
 │              │   chunks   │   ├─ ChromaDB (RAG)           │
 │  Daily.co ◀──┼── Video ──▶│   └─ Gemini 2.5 Flash         │
 └──────────────┘            └──────────────▲───────────────┘
@@ -38,13 +40,23 @@ identisch**: Was im Chat steht, ist exakt das, was der Avatar spricht.
 
 ## 2. Komponenten
 
+Das Backend ist in ein `app/`-Paket aufgeteilt (statt einer einzelnen
+`main.py`), damit jede Datei eine klar abgegrenzte Aufgabe hat:
+
 | Datei | Verantwortung |
 |---|---|
-| `main.py` | FastAPI-Backend: RAG, Gemini-Calls, alle Endpoints, Session-Verwaltung |
-| `static/index.html` | Komplettes Frontend (HTML + CSS + Vanilla-JS): Chat-Panel, Avatar-Einbindung, SSE-Konsum |
-| `fill_db.py` | Befüllt ChromaDB einmalig aus `data/faq.json` + PDF-Dokumenten |
-| `start.ps1` / `start.sh` | Einheitlicher Start: .env-Validierung → DB-Befüllung (falls nötig) → uvicorn |
-| `tests/` | 56 pytest-Tests; schwere Abhängigkeiten (ChromaDB, Gemini, Torch) sind in `conftest.py` gemockt |
+| `app/main.py` | FastAPI-App-Wiring: Middleware, Router-Einbindung, Lifespan-Warmup, `/health`, `/` |
+| `app/routes/chat.py` | `POST /chat` — getippter Pfad (SSE-Stream, Text-Prompt) |
+| `app/routes/tavus.py` | `POST /tavus/session`, `/tavus/end`, `/tavus/message`, `/tavus/settings`, `/tavus/llm` (+ Aliase) — Voice-Pfad |
+| `app/routes/avatar.py` | `GET /avatar/config` — Provider-Konfiguration (derzeit nur Tavus) |
+| `app/prompts.py` | `KIRA_BASE_PROMPT` + getrennte Text-/Voice-Erweiterungen (DE/EN), `build_prompt(mode, lang)` |
+| `app/rag.py` | ChromaDB-Client, `build_rag_context()`, `STUDIENGANG_FILES` (Studiengang-Filter) |
+| `app/gemini.py` | Gemini-Client, `gemini_config()`, SSE-Header |
+| `app/session.py` | In-Memory-Sessions, TTL-Aufräumung, Satzanfang-Variation |
+| `static/index.html` | Komplettes Frontend (HTML + CSS + Vanilla-JS): Chat-Panel, Avatar-Einbindung, SSE-Konsum, Sprach-/Studiengang-Auswahl |
+| `fill_db.py` | Befüllt ChromaDB einmalig aus `data/faq.json` + PDF-Dokumenten (Upsert in 5000er-Batches) |
+| `run.ps1` | Idempotenter Einzel-Start: .env-Validierung → ngrok + pip + DB-Befüllung (falls nötig) → ngrok-Tunnel → uvicorn |
+| `tests/` | pytest-Tests; schwere Abhängigkeiten (ChromaDB, Gemini, Torch) sind in `conftest.py` gemockt |
 
 ---
 
@@ -52,16 +64,20 @@ identisch**: Was im Chat steht, ist exakt das, was der Avatar spricht.
 
 ### 3.1 Getippter Pfad: `POST /chat`
 
-Ablauf pro Anfrage (`main.py`, Endpoint `chat`):
+Ablauf pro Anfrage (`app/routes/chat.py`, Endpoint `chat`):
 
-1. **Session-Pflege:** `touch_session()` merkt den Zugriffszeitpunkt und räumt
-   Sessions auf, die länger als 30 Minuten (`SESSION_TTL_SECONDS`) inaktiv
-   waren — verhindert unbegrenztes Speicherwachstum.
-2. **RAG-Abfrage:** `build_rag_context()` sucht die 3 ähnlichsten Dokumente in
-   ChromaDB. Läuft über `asyncio.to_thread`, damit das synchrone
-   Embedding-Modell den Event-Loop nicht blockiert.
-3. **Prompt-Bau:** `KIRA_PROMPT` + Satzanfang-Anweisung + Kontext-Anweisung +
-   gefundene Dokumente + die letzten 4 Gesprächszüge + Frage.
+1. **Session-Pflege:** `touch_session()` (in `app/session.py`) merkt den
+   Zugriffszeitpunkt und räumt Sessions auf, die länger als 30 Minuten
+   (`SESSION_TTL_SECONDS`) inaktiv waren — verhindert unbegrenztes
+   Speicherwachstum.
+2. **RAG-Abfrage:** `build_rag_context(frage, studiengang)` sucht die 3
+   ähnlichsten Dokumente in ChromaDB, optional gefiltert auf das Modulhandbuch
+   des gewählten Studiengangs. Läuft über `asyncio.to_thread`, damit das
+   synchrone Embedding-Modell den Event-Loop nicht blockiert.
+3. **Prompt-Bau:** `build_prompt("text", lang)` (Basis + Text-Regeln in der
+   gewählten Sprache) + Satzanfang-Anweisung + Kontext-Anweisung + gefundene
+   Dokumente + die letzten 4 Gesprächszüge + Frage. Die Sprache (`lang`) und der
+   Studiengang kommen als Felder im Request-Body vom Frontend.
 4. **Streaming:** Ein einziger Gemini-Call über
    `client.aio.models.generate_content_stream`. Jeder Text-Chunk wird sofort
    als Server-Sent Event an den Browser geschickt:
@@ -81,18 +97,27 @@ Ablauf pro Anfrage (`main.py`, Endpoint `chat`):
 
 Tavus betreibt die komplette Sprachstrecke (Spracherkennung, Text-to-Speech,
 Video-Rendering) und ruft unser Backend als **Custom LLM** auf — die Schnittstelle
-ist OpenAI-Chat-Completions-kompatibel. Die URL dazu (ngrok-Tunnel + `/tavus/llm`)
-ist im Tavus-Dashboard in der Persona hinterlegt.
+ist OpenAI-Chat-Completions-kompatibel. Die URL dazu (ngrok-Tunnel) ist im
+Tavus-Dashboard in der Persona hinterlegt. Der Endpoint ist unter drei Aliasen
+erreichbar (`/tavus/llm`, `/tavus/llm/chat/completions`, `/chat/completions`),
+weil Tavus' OpenAI-Client `/chat/completions` an die Basis-URL anhängt — so
+funktionieren sowohl eine Basis-URL mit `/tavus/llm` als auch die ngrok-Root.
 
 1. Tavus schickt den bisherigen Gesprächsverlauf als `messages`-Liste.
 2. Die letzte Nutzer-Nachricht wird extrahiert, die vorherigen Züge (max. 6)
    werden als Gesprächsverlauf in den Prompt übernommen — der Avatar kann sich
    also auf Vorheriges beziehen ("Und wo reiche ich das ein?").
-3. Gleiche RAG-Abfrage, gleiches `KIRA_PROMPT` wie im Chat.
-4. Die Gemini-Chunks werden **durchgereicht, während sie entstehen** —
+3. Gleiche RAG-Abfrage wie im Chat, aber `build_prompt("voice", lang)` (kürzerer,
+   sprechoptimierter Voice-Prompt).
+4. **Sprache & Studiengang:** Tavus sendet keine UI-Felder mit. Daher merkt sich
+   das Backend die zuletzt im Frontend gewählten Voice-Einstellungen
+   (`active_voice_prefs`), gesetzt bei `POST /tavus/session` und aktualisiert über
+   `POST /tavus/settings`. `/tavus/llm` liest Sprache und Studiengang aus diesem
+   Zustand. Er ist global — ausgelegt für den lokalen Einzel-Session-Betrieb.
+5. Die Gemini-Chunks werden **durchgereicht, während sie entstehen** —
    Tavus beginnt zu sprechen, sobald der erste Satz da ist. Das ist der größte
    Latenzgewinn des Projekts.
-5. **Retry-Logik:** Bis zu 3 Versuche, aber nur solange noch kein Chunk
+6. **Retry-Logik:** Bis zu 3 Versuche, aber nur solange noch kein Chunk
    gesendet wurde (`gesendet`-Flag). Ein Retry mitten im Stream würde Text
    doppelt sprechen lassen. Schlagen alle Versuche fehl, kommt
    "Service momentan nicht verfügbar." als Fallback.
@@ -114,17 +139,22 @@ es verworfen. Beim Verbindungsabbau wird das Set geleert.
 
 ## 4. Prompt-Methodik
 
-Der Prompt besteht aus zwei Bausteinen in `main.py`:
+Der Prompt wird in `app/prompts.py` aus einer Basis plus einer modus- und
+sprachabhängigen Erweiterung zusammengesetzt (`build_prompt(mode, lang)`):
 
-- **`KIRA_PERSONA`** — wer KIRA ist: freundliche, kompetente Studienberaterin,
-  duzt, antwortet wie eine erfahrene Kommilitonin. Enthält auch
-  Sicherheitsregeln (Rollenwechsel-Versuche ignorieren, Themenfremdes höflich
-  ablehnen).
-- **`KIRA_PROMPT`** = Persona + Antwortregeln. Da jede Antwort **vorgelesen**
-  wird, gelten Sprechregeln: 2–3 Sätze, Zahlen ausgeschrieben
-  ("fünfzehnter Januar" statt "15.01."), keine Abkürzungen, Klammern oder
-  Listen. Für Menschlichkeit: warm, geht mit einem halben Satz auf die
-  Situation ein, variiert Satzbau von Antwort zu Antwort.
+- **`KIRA_BASE_PROMPT`** — sprach- und modusunabhängiger Kern: wer KIRA ist
+  (freundliche, kompetente Studienberaterin), Aufgabe, Sicherheitsregeln
+  (Rollenwechsel-Versuche ignorieren) und das Nachfrage-Verhalten.
+- **`KIRA_TEXT_EXT[lang]`** — Text-Regeln (DE/EN): fließende Sätze, keine Listen,
+  Länge an die Frage angepasst (1–2 Sätze bei einfachen, 3–5 bei komplexen
+  Fragen), duzt, lehnt Themenfremdes höflich ab.
+- **`KIRA_VOICE_EXT[lang]`** — Voice-Regeln (DE/EN): bewusst kürzer als der
+  Text-Prompt, maximal 2–3 gut vorlesbare Sätze, keine Klammern/Abkürzungen,
+  variierte Satzanfänge.
+
+`/chat` ruft `build_prompt("text", lang)`, `/tavus/llm` ruft
+`build_prompt("voice", lang)`. So können sich gesprochene und getippte Antworten
+in Stil und Länge unterscheiden, obwohl sie dieselbe Wissensbasis nutzen.
 
 **Satzanfang-Variation:** `remember_opening()` speichert pro Session das erste
 Wort der letzten Antwort; `opening_instruction()` ergänzt den nächsten Prompt
@@ -147,9 +177,13 @@ Treffer-Qualität bekommt das Modell eine andere Anweisung.
 - Embedding-Modell: `paraphrase-multilingual-MiniLM-L12-v2`
   (mehrsprachig, gut für Deutsch, klein genug für CPU).
 
-**Abfrage (`build_rag_context()` in `main.py`):**
+**Abfrage (`build_rag_context()` in `app/rag.py`):**
 - Die Nutzerfrage wird embedded und gegen die Collection verglichen;
   die 3 ähnlichsten Dokumente bilden den Kontext (je auf 400 Zeichen gekürzt).
+- **Studiengang-Filter:** Wird ein Studiengang gewählt, schränkt ein
+  `where`-Filter die Suche über `STUDIENGANG_FILES` auf das zugehörige
+  Modulhandbuch-PDF ein (Mapping Studiengang-Schlüssel → Dateiname). Ohne
+  Auswahl wird die gesamte Wissensbasis durchsucht.
 - **Distanz-Schwelle 0.45:** Ist das beste Dokument näher als 0.45, gilt die
   Wissensbasis als zuständig → Anweisung "antworte ausschließlich auf Basis
   des Kontexts". Ist die Distanz größer, fällt das System auf allgemeines
@@ -199,9 +233,18 @@ fertigen Antwort, erster Chunk deutlich früher.
   neuer Timer (`idleFired`-Flag).
 - **Doppel-Send-Schutz:** Enter ist gesperrt, solange ein Stream läuft
   (Send-Button disabled).
-- **Provider-Switching:** `AVATAR_PROVIDER` in der .env steuert, ob Tavus,
-  HeyGen/LiveAvatar oder Anam geladen wird; `speakAnswer()` routet die Sprache
-  entsprechend (Tavus: Echo-App-Message, sonst `avatarSpeak()`).
+- **Sprach-Umschalter:** Der Button oben rechts (mit Flagge) schaltet zwischen
+  Deutsch und Englisch. `applyLang()` aktualisiert alle UI-Texte aus dem
+  `I18N`-Dictionary und setzt die Erkennungssprache der Spracheingabe; `lang`
+  wird bei jeder `/chat`-Anfrage mitgeschickt.
+- **Studiengang-Dropdown:** Ebenfalls oben rechts, gruppiert in Bachelor/Master.
+  Die Auswahl (`currentStudiengang`) gilt für die Session und wird bei jeder
+  `/chat`-Anfrage mitgeschickt.
+- **Voice-Pfad-Synchronisation:** Da Tavus `/tavus/llm` ohne UI-Kontext aufruft,
+  meldet `pushVoicePrefs()` Sprache und Studiengang an `POST /tavus/settings` —
+  beim Avatar-Start und bei jeder Änderung während eines laufenden Gesprächs.
+- **Avatar-Provider:** Es wird ausschließlich Tavus geladen; `speakAnswer()`
+  schickt den getippten Antworttext als Echo-App-Message an den Avatar.
 
 ---
 
@@ -210,8 +253,9 @@ fertigen Antwort, erster Chunk deutlich früher.
 - **TDD:** Jede Funktionalität wurde test-first entwickelt (Test schreiben →
   fehlschlagen sehen → implementieren → grün).
 - **Mock-Strategie:** `tests/conftest.py` ersetzt ChromaDB, google-genai,
-  sentence-transformers und torch durch MagicMocks, **bevor** `main` importiert
-  wird — die Tests laufen dadurch in <0.5 s ohne Modelle oder API-Keys.
+  sentence-transformers und torch durch MagicMocks, **bevor** das `app`-Paket
+  importiert wird — die Tests laufen dadurch in <0.5 s ohne Modelle oder
+  API-Keys.
 - **Async-Streaming-Mocks:** Gemini-Streams werden als Async-Generatoren
   gemockt (`make_async_stream`), Fehler mitten im Stream über
   `make_failing_stream`. Damit sind auch die heiklen Pfade getestet:
@@ -234,23 +278,28 @@ $env:PYTHONIOENCODING="utf-8"; python -m pytest tests/ -v
 ## 9. Betrieb
 
 ```powershell
-.\start.ps1     # Windows       (Linux/Mac: ./start.sh)
+.\run.ps1
 ```
-Das Skript validiert die `.env` (GOOGLE_API_KEY immer, TAVUS_API_KEY bei
-`AVATAR_PROVIDER=tavus`), befüllt `chroma_db/` beim ersten Start über
-`fill_db.py` und startet uvicorn auf Port 8000 mit `--reload`.
+`run.ps1` ist idempotent und übernimmt alles in einem Befehl: `.env`-Validierung
+(GOOGLE_API_KEY), Installation von ngrok und pip-Paketen beim ersten Aufruf,
+Befüllung von `chroma_db/` über `fill_db.py` (falls nötig), Start des
+ngrok-Tunnels (gibt die öffentliche URL aus) und uvicorn auf Port 8000 mit
+`--reload` (Modulpfad `app.main:app`). Folgeaufrufe überspringen erledigte
+Schritte (pip via `.pip-stamp`, ngrok via Tunnel-Probe auf Port 4040).
 
-Für den **gesprochenen** Tavus-Pfad muss der Server öffentlich erreichbar sein:
-`ngrok http 8000` starten und die ngrok-URL + `/tavus/llm` im Tavus-Dashboard
-in der Persona als Custom-LLM-URL eintragen.
+Für den **gesprochenen** Tavus-Pfad wird die ausgegebene ngrok-URL im
+Tavus-Dashboard in der Persona als Custom-LLM-URL eingetragen (Root-URL oder mit
+`/tavus/llm` — beides funktioniert).
 
 ---
 
 ## 10. Bekannte Grenzen
 
-- **Ein Prozess:** Session-State (`sessions`, `voice_openings`) liegt im
-  Speicher — `uvicorn --workers N` oder mehrere Instanzen bräuchten einen
-  externen Store (z.B. Redis).
+- **Ein Prozess / eine Voice-Session:** Session-State (`sessions`,
+  `voice_openings`) und die Voice-Einstellungen (`active_voice_prefs`) liegen im
+  Speicher und sind global. `uvicorn --workers N`, mehrere Instanzen oder mehrere
+  gleichzeitige Avatar-Gespräche bräuchten einen externen Store bzw. eine
+  Schlüsselung pro `conversation_id` (z.B. Redis).
 - **CORS ist offen** (`allow_origins=["*"]`) — für Produktion einschränken.
 - **Gesprochener Pfad ohne Satzanfang-Variation:** `/tavus/llm` hat keine
   Session-ID, daher greift die Variation dort nicht.
