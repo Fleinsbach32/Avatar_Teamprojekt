@@ -84,6 +84,15 @@ if (!(Test-Path "chroma_db")) {
 }
 
 # --- 6. ngrok starten (falls nicht schon aktiv) ----------
+# Stabile (reservierte) Domain aus BASE_URL ableiten, damit die im Tavus-Dashboard
+# hinterlegte Custom-LLM-URL nach jedem Neustart gueltig bleibt. Ohne feste Domain
+# vergibt ngrok bei jedem Start eine neue zufaellige URL -> der Voice-Pfad (Tavus
+# ruft die URL serverseitig) bricht ab, waehrend der Text-Chat weiter funktioniert.
+$ngrokDomain = ""
+if ($env:BASE_URL) {
+    $ngrokDomain = ($env:BASE_URL -replace '^https?://', '' -replace '/.*$', '').Trim()
+}
+
 $ngrokActive = $false
 try {
     $null = Invoke-RestMethod "http://localhost:4040/api/tunnels" -ErrorAction Stop
@@ -93,8 +102,13 @@ try {
 
 if (-not $ngrokActive) {
     Write-Host "ngrok wird gestartet..." -ForegroundColor Cyan
-    Start-Process -FilePath "ngrok" -ArgumentList "http 8000" -WindowStyle Hidden
-    Start-Sleep 2
+    if ($ngrokDomain) {
+        Write-Host "  feste Domain: $ngrokDomain" -ForegroundColor Gray
+        Start-Process -FilePath "ngrok" -ArgumentList "http", "--domain=$ngrokDomain", "8000" -WindowStyle Hidden
+    } else {
+        Start-Process -FilePath "ngrok" -ArgumentList "http", "8000" -WindowStyle Hidden
+    }
+    Start-Sleep 3
 }
 
 try {
