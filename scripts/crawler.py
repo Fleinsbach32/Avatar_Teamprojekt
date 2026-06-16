@@ -71,8 +71,16 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+# Domains, deren interne Links beim Crawl verfolgt werden (ohne "www."-Präfix
+# notiert; www-Varianten werden in _strip_www normalisiert). Bewusst NICHT die
+# breite www.kit.edu — die bleibt seed-only, um Crawl-Explosion zu vermeiden.
 ALLOWED_DOMAINS = {
-    "www.wiwi.kit.edu", "wiwi.kit.edu",
+    "wiwi.kit.edu",
+    "fachschaft.org",
+    "hoc.kit.edu",
+    "studium.hoc.kit.edu",
+    "zak.kit.edu",
+    "sle.kit.edu",
 }
 SHIBBOLETH_PATTERNS = [
     "shibboleth", "idp.kit.edu", "idp2.kit.edu",
@@ -207,9 +215,15 @@ def is_skippable_response(resp: requests.Response) -> tuple[bool, str]:
 # URL classification helpers
 # ---------------------------------------------------------------------------
 
+def _strip_www(netloc: str) -> str:
+    """Entfernt ein 'www.'-Präfix (Präfix, nicht Zeichenmenge wie lstrip)."""
+    netloc = netloc.lower()
+    return netloc[4:] if netloc.startswith("www.") else netloc
+
+
 def is_internal(url: str) -> bool:
-    domain = urlparse(url).netloc.lstrip("www.")
-    return any(domain == d.lstrip("www.") for d in ALLOWED_DOMAINS)
+    domain = _strip_www(urlparse(url).netloc)
+    return any(domain == _strip_www(d) for d in ALLOWED_DOMAINS)
 
 
 def is_pdf(url: str, content_type: str = "") -> bool:
@@ -338,10 +352,11 @@ def get_or_create_collection(chroma_dir: str):
         model_name="paraphrase-multilingual-MiniLM-L12-v2"
     )
     client = chromadb.PersistentClient(path=chroma_dir)
+    # Kein hnsw:space-Override -> gleiche Distanzmetrik wie fill_db.py/app.rag
+    # (sonst wäre der Distanz-Schwellwert in app/rag.py je nach Erzeuger anders).
     collection = client.get_or_create_collection(
         name=CHROMA_COLLECTION_NAME,
         embedding_function=embedding_fn,
-        metadata={"hnsw:space": "cosine"},
     )
     logger.info("Opened/created ChromaDB collection '%s'", CHROMA_COLLECTION_NAME)
     return client, collection
@@ -658,6 +673,9 @@ def crawl(
                     "content_type": content_type_label,
                     "faculty": "wiwi",
                     "language": language,
+                    # Webinhalte sind nicht studiengangsspezifisch -> "all", damit
+                    # sie im Studiengang-$or-Filter (app/rag.py) erscheinen.
+                    "program": "all",
                 }
                 n = store_chunks(collection, model, chunks, meta_base)
                 stats["chunks_stored"] += n
@@ -808,6 +826,7 @@ def inject_module_ratings(
             "faculty": "wiwi",
             "language": "de",
             "chunk_index": 0,
+            "program": "all",
         }
 
         try:
@@ -875,6 +894,7 @@ def fill_db_from_crawled(output_dir: Path, chroma_dir: str) -> int:
             "content_type": record.get("metadata", {}).get("content_type", "general"),
             "faculty": record.get("metadata", {}).get("faculty", "wiwi"),
             "language": record.get("metadata", {}).get("language", "de"),
+            "program": "all",
         }
         chunks = chunk_text(text)
         n = store_chunks(collection, model, chunks, meta_base)
