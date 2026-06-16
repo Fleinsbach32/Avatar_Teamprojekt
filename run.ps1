@@ -83,7 +83,7 @@ if (!(Test-Path "chroma_db")) {
     if ($LASTEXITCODE -ne 0) { Write-Host "FEHLER: scripts/fill_db.py fehlgeschlagen." -ForegroundColor Red; exit 1 }
 }
 
-# --- 6. ngrok starten (falls nicht schon aktiv) ----------
+# --- 6. ngrok starten (alte Session beenden, feste Domain) ----------
 # Stabile (reservierte) Domain aus BASE_URL ableiten, damit die im Tavus-Dashboard
 # hinterlegte Custom-LLM-URL nach jedem Neustart gueltig bleibt. Ohne feste Domain
 # vergibt ngrok bei jedem Start eine neue zufaellige URL -> der Voice-Pfad (Tavus
@@ -93,35 +93,44 @@ if ($env:BASE_URL) {
     $ngrokDomain = ($env:BASE_URL -replace '^https?://', '' -replace '/.*$', '').Trim()
 }
 
-$ngrokActive = $false
-try {
-    $null = Invoke-RestMethod "http://localhost:4040/api/tunnels" -ErrorAction Stop
-    $ngrokActive = $true
-    Write-Host "ngrok laeuft bereits." -ForegroundColor Green
-} catch {}
-
-if (-not $ngrokActive) {
-    Write-Host "ngrok wird gestartet..." -ForegroundColor Cyan
-    if ($ngrokDomain) {
-        Write-Host "  feste Domain: $ngrokDomain" -ForegroundColor Gray
-        Start-Process -FilePath "ngrok" -ArgumentList "http", "--domain=$ngrokDomain", "8000" -WindowStyle Hidden
-    } else {
-        Start-Process -FilePath "ngrok" -ArgumentList "http", "8000" -WindowStyle Hidden
-    }
-    Start-Sleep 3
+# Alte ngrok-Agent-Session beenden (ngrok-Free erlaubt nur 1 gleichzeitige
+# Session; eine Zombie-Instanz aus einem vorigen Lauf verhindert sonst den Start
+# mit fester Domain). Idempotent: laeuft keine, passiert nichts.
+$existing = Get-Process -Name ngrok -ErrorAction SilentlyContinue
+if ($existing) {
+    Write-Host "Beende alte ngrok-Session..." -ForegroundColor Yellow
+    $existing | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep 1
 }
 
-try {
-    $tunnels = Invoke-RestMethod "http://localhost:4040/api/tunnels"
-    $url = ($tunnels.tunnels | Where-Object { $_.proto -eq "https" }).public_url
-    if ($url) {
-        Write-Host ""
-        Write-Host "ngrok URL (fuer Tavus-Dashboard): $url" -ForegroundColor Cyan
-        Write-Host "Custom-LLM-URL:                  $url/tavus/llm" -ForegroundColor Cyan
-        Write-Host ""
-    }
-} catch {
-    Write-Host "ngrok URL nicht abgerufen - manuell pruefen: http://localhost:4040" -ForegroundColor Yellow
+Write-Host "ngrok wird gestartet..." -ForegroundColor Cyan
+if ($ngrokDomain) {
+    Write-Host "  feste Domain: $ngrokDomain" -ForegroundColor Gray
+    Start-Process -FilePath "ngrok" -ArgumentList "http", "--domain=$ngrokDomain", "8000" -WindowStyle Hidden
+} else {
+    Start-Process -FilePath "ngrok" -ArgumentList "http", "8000" -WindowStyle Hidden
+}
+
+# Auf den Tunnel warten (reservierte Domain braucht ein paar Sekunden).
+$url = $null
+foreach ($i in 1..15) {
+    Start-Sleep 1
+    try {
+        $tunnels = Invoke-RestMethod "http://localhost:4040/api/tunnels" -ErrorAction Stop
+        $url = ($tunnels.tunnels | Where-Object { $_.proto -eq "https" }).public_url
+        if ($url) { break }
+    } catch {}
+}
+if ($url) {
+    Write-Host ""
+    Write-Host "ngrok URL (fuer Tavus-Dashboard): $url" -ForegroundColor Cyan
+    Write-Host "Custom-LLM-URL:                  $url/tavus/llm" -ForegroundColor Cyan
+    Write-Host ""
+} else {
+    Write-Host "ngrok URL nicht abgerufen. Moegliche Ursachen:" -ForegroundColor Yellow
+    Write-Host "  - andere ngrok-Session aktiv (dashboard.ngrok.com/agents -> beenden)" -ForegroundColor Yellow
+    Write-Host "  - Domain '$ngrokDomain' ist nicht reserviert (dann BASE_URL in .env leeren)" -ForegroundColor Yellow
+    Write-Host "  - manuell pruefen: http://localhost:4040" -ForegroundColor Yellow
 }
 
 # --- 7. uvicorn starten ----------------------------------
