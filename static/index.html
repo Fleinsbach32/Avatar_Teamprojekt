@@ -168,6 +168,18 @@ body {
   letter-spacing: 0.02em;
 }
 
+/* ── Avatar-Beenden-Button (Overlay) ───────────────── */
+.end-avatar-btn {
+  position: absolute; top: 12px; left: 12px; z-index: 5;
+  background: #ef4444; color: #fff; border: none;
+  border-radius: 20px; padding: 8px 16px;
+  font-size: 13px; font-weight: 500; font-family: var(--font);
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  transition: background 0.15s, transform 0.1s;
+}
+.end-avatar-btn:hover  { background: #dc2626; transform: translateY(-1px); }
+.end-avatar-btn:active { transform: scale(0.97); }
+
 /* ── Start-Button ──────────────────────────────────── */
 .start-btn {
   background: var(--surface);
@@ -574,6 +586,7 @@ body {
       style="width:100%;height:100%;display:none;object-fit:cover;"
     ></video>
     <audio id="avatarAudio" autoplay></audio>
+    <button id="endAvatarBtn" class="end-avatar-btn" style="display:none;" onclick="endAvatar()">⏹ Beenden</button>
   </div>
 </main>
 
@@ -638,6 +651,7 @@ body {
       greeting:       "Hallo, ich bin KIRA, deine Studienberaterin am KIT. Womit kann ich dir helfen?",
       idleFollowup:   "Kann ich dir noch bei etwas helfen?",
       startBtn:       "▶ Gespräch starten",
+      endBtn:         "⏹ Beenden",
       hint:           "Enter zum Senden · Shift+Enter für neue Zeile",
       chatTitle:      "KIRA",
       emptyStateText: "Hallo, ich bin KIRA, deine Studienberaterin am KIT.<br>Womit kann ich dir helfen?",
@@ -655,6 +669,7 @@ body {
       greeting:       "Hi, I'm KIRA, your academic advisor at KIT. How can I help you?",
       idleFollowup:   "Can I help you with anything else?",
       startBtn:       "▶ Start conversation",
+      endBtn:         "⏹ End",
       hint:           "Enter to send · Shift+Enter for new line",
       chatTitle:      "KIRA",
       emptyStateText: "Hi, I'm KIRA, your academic advisor at KIT.<br>How can I help you?",
@@ -678,6 +693,8 @@ body {
     if (hintEl) hintEl.textContent = t.hint;
     const startEl = document.getElementById("startBtn");
     if (startEl && !startEl.disabled) startEl.textContent = t.startBtn;
+    const endEl = document.getElementById("endAvatarBtn");
+    if (endEl) endEl.textContent = t.endBtn;
     const titleEl = document.querySelector(".chat-title");
     if (titleEl) titleEl.textContent = t.chatTitle;
     const sel = document.getElementById("studiengangSelect");
@@ -851,8 +868,17 @@ body {
   // ── Avatar starten (Provider-abhängig) ──────────────
   async function startAvatar() {
     startBtn.disabled = true;
+    document.getElementById("endAvatarBtn").style.display = "none";
     avatarLabel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;color:#009682"><div class="spinner"></div> Verbinde mit KIRA...</div>';
     await _startAvatarTavus();
+  }
+
+  // Beendet das laufende Avatar-Gespraech. Der left-meeting-Handler uebernimmt
+  // den kompletten Teardown (/tavus/end, destroy, UI-Reset).
+  function endAvatar() {
+    if (tavusCall) {
+      try { tavusCall.leave(); } catch (_) {}
+    }
   }
 
   async function _startAvatarTavus() {
@@ -902,6 +928,7 @@ body {
           avatarVideo.srcObject = new MediaStream([e.track]);
           avatarVideo.style.display = "block";
           avatarPH.style.display = "none";
+          document.getElementById("endAvatarBtn").style.display = "block";
           document.getElementById("statusText").textContent = "bereit";
           document.getElementById("statusDot").className = "status-dot";
           // Begrüßung verzögert, damit der Avatar erst sichtbar ist, bevor er spricht
@@ -941,6 +968,7 @@ body {
         greetingSent = false;
         avatarVideo.style.display = "none";
         avatarPH.style.display = "flex";
+        document.getElementById("endAvatarBtn").style.display = "none";
         avatarLabel.textContent = "Verbindung getrennt";
         startBtn.disabled = false;
         startBtn.textContent = "Erneut verbinden";
@@ -967,6 +995,7 @@ body {
     } catch (err) {
       console.error("Tavus Fehler:", err);
       avatarLabel.textContent = "Avatar nicht verfügbar: " + err.message;
+      document.getElementById("endAvatarBtn").style.display = "none";
       startBtn.disabled = false;
       startBtn.textContent = "Erneut versuchen";
       if (tavusConversationId) {
