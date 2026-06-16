@@ -14,7 +14,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot
+# crawl.ps1 liegt in scripts/ - vom Projekt-Root aus arbeiten, damit
+# requirements.txt, .pip-stamp und chroma_db/ korrekt aufgeloest werden.
+Set-Location (Split-Path $PSScriptRoot -Parent)
 $env:PYTHONIOENCODING = "utf-8"
 
 Write-Host ""
@@ -58,7 +60,7 @@ if ($needPip) {
 if ($InjectRatings) {
     Write-Host ""
     Write-Host "[2/3] Modulbewertungen in ChromaDB einpflegen..." -ForegroundColor Cyan
-    python crawler.py --inject-ratings
+    python scripts/crawler.py --inject-ratings
     if ($LASTEXITCODE -ne 0) {
         Write-Host "FEHLER: inject-ratings fehlgeschlagen." -ForegroundColor Red
         exit 1
@@ -70,7 +72,7 @@ if ($InjectRatings) {
 if ($FillDbOnly) {
     Write-Host ""
     Write-Host "[2/3] Gecrawlte JSONs in ChromaDB einpflegen..." -ForegroundColor Cyan
-    python crawler.py --fill-db
+    python scripts/crawler.py --fill-db
     if ($LASTEXITCODE -ne 0) {
         Write-Host "FEHLER: fill-db fehlgeschlagen." -ForegroundColor Red
         exit 1
@@ -86,7 +88,7 @@ Write-Host "      Ziel: wiwi.kit.edu + Fachschaft + HOC/ZAK" -ForegroundColor Gr
 Write-Host "      Abbrechen mit Ctrl+C (bisherige Daten bleiben erhalten)" -ForegroundColor Gray
 Write-Host ""
 
-python crawler.py --max-pages $MaxPages --delay $Delay
+python scripts/crawler.py --max-pages $MaxPages --delay $Delay
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "FEHLER: Crawler fehlgeschlagen." -ForegroundColor Red
@@ -99,7 +101,7 @@ Write-Host "[3/3] Gecrawlte Seiten in ChromaDB einbetten..." -ForegroundColor Cy
 Write-Host "      (Sentence-Transformer laedt beim ersten Mal ca. 500 MB)" -ForegroundColor Gray
 Write-Host ""
 
-python crawler.py --fill-db
+python scripts/crawler.py --fill-db
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "FEHLER: fill-db fehlgeschlagen." -ForegroundColor Red

@@ -1,15 +1,23 @@
 import chromadb
 import json
+from pathlib import Path
 from pypdf import PdfReader
 from chromadb.utils import embedding_functions
+
+# Projekt-Root (eine Ebene über scripts/) — alle Pfade beziehen sich darauf,
+# damit das Skript unabhängig vom Arbeitsverzeichnis läuft.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="paraphrase-multilingual-MiniLM-L12-v2"
 )
 
-CHROMA_PATH = r"chroma_db"
-FAQ_PATH = r"data/faq.json"
-PDF_FOLDER = r"data/pdfs"
+CHROMA_PATH = str(PROJECT_ROOT / "chroma_db")
+FAQ_FILES = [
+    (PROJECT_ROOT / "data" / "faq_de.json",  "de"),
+    (PROJECT_ROOT / "data" / "faq_eng.json", "en"),
+]
+PDF_FOLDER = PROJECT_ROOT / "data" / "pdfs"
 
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
 collection = chroma_client.get_or_create_collection(
@@ -21,18 +29,28 @@ ids = []
 metadatas = []
 counter = 0
 
-# ── 1. FAQ laden ──────────────────────────────────────────
-with open(FAQ_PATH, encoding="utf-8") as f:
-    faqs = json.load(f)
+# ── 1. FAQ laden (de + en; leere/ungültige Dateien überspringen) ──
+faq_total = 0
+for faq_path, lang in FAQ_FILES:
+    if not faq_path.exists():
+        print(f"[FAQ] {faq_path.name} fehlt - uebersprungen")
+        continue
+    try:
+        with open(faq_path, encoding="utf-8") as f:
+            faqs = json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        print(f"[FAQ] {faq_path.name} ist leer/ungueltig - uebersprungen")
+        continue
+    for item in faqs:
+        text = f"Frage: {item['question']}\nAntwort: {item['answer']}"
+        documents.append(text)
+        ids.append(f"faq_{counter}")
+        metadatas.append({"source": "faq", "language": lang, "question": item["question"]})
+        counter += 1
+        faq_total += 1
+    print(f"[FAQ] {faq_path.name}: {len(faqs)} Eintraege geladen ({lang})")
 
-for item in faqs:
-    text = f"Frage: {item['question']}\nAntwort: {item['answer']}"
-    documents.append(text)
-    ids.append(f"faq_{counter}")
-    metadatas.append({"source": "faq", "question": item["question"]})
-    counter += 1
-
-print(f"[FAQ] {len(faqs)} FAQ-Eintraege geladen")
+print(f"[FAQ] {faq_total} FAQ-Eintraege gesamt")
 
 # ── 2. PDFs laden & chunken ───────────────────────────────
 import os
@@ -87,4 +105,4 @@ for i in range(0, len(documents), BATCH_SIZE):
     print(f"   Batch {i // BATCH_SIZE + 1}: {min(i + BATCH_SIZE, len(documents))}/{len(documents)} gespeichert")
 
 print(f"\n[FERTIG] Gesamt in ChromaDB: {len(documents)} Eintraege")
-print(f"   -> {len(faqs)} FAQ + {chunk_count} PDF-Chunks")
+print(f"   -> {faq_total} FAQ + {chunk_count} PDF-Chunks")

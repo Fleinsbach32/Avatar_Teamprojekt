@@ -64,6 +64,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Projekt-Root (eine Ebene über scripts/) — Default-Pfade beziehen sich darauf,
+# damit chroma_db/ und crawled_data/ im Projekt-Root landen (konsistent mit app/rag.py).
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -954,12 +958,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--delay", type=float, default=0.5, help="Seconds between requests")
     p.add_argument(
         "--output-dir",
-        default=str(Path(__file__).parent / "crawled_data"),
+        default=str(PROJECT_ROOT / "crawled_data"),
         help="Directory for JSON output files",
     )
     p.add_argument(
         "--chroma-dir",
-        default=str(Path(__file__).parent / "chroma_db"),
+        default=str(PROJECT_ROOT / "chroma_db"),
         help="ChromaDB persist directory",
     )
     p.add_argument(
