@@ -305,7 +305,7 @@ def test_tavus_llm_uses_voice_prefs(mock_client, mock_collection):
     })
     # Studiengang-Filter aus den Prefs (nicht aus dem Request) angewendet
     call_kwargs = mock_collection.query.call_args.kwargs
-    assert call_kwargs.get("where") == {"source": {"$in": ["mhb_wiinf_BSc_de_aktuell.pdf"]}}
+    assert call_kwargs.get("where") == {"$or": [{"program": "winfo_bsc"}, {"program": "all"}]}
     # Englischer Voice-Prompt aus den Prefs
     prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
     assert "English" in prompt or "english" in prompt.lower()

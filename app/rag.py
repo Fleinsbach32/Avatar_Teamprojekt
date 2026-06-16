@@ -5,7 +5,7 @@ from chromadb.utils import embedding_functions
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-MODULE_ID_RE = re.compile(r'\bM-[A-Z]+-\d+\b')
+MODULE_ID_RE = re.compile(r'\b[MT]-[A-Z]+-\d+\b')
 
 embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="paraphrase-multilingual-MiniLM-L12-v2"
@@ -30,6 +30,22 @@ STUDIENGANG_FILES: dict[str, list[str]] = {
 }
 
 
+def _studiengang_where(studiengang: str | None) -> dict | None:
+    """Filter auf den gewählten Studiengang: dessen Handbuch (program==key) plus
+    FAQ/allgemeine Infos (program=="all"). Andere Handbücher fallen weg.
+    Ohne (gültigen) Studiengang: kein Filter."""
+    if studiengang and studiengang in STUDIENGANG_FILES:
+        return {"$or": [{"program": studiengang}, {"program": "all"}]}
+    return None
+
+
+def _combine(a: dict | None, b: dict | None) -> dict | None:
+    """Kombiniert zwei ChromaDB-where-Filter mit $and (None-sicher)."""
+    if a and b:
+        return {"$and": [a, b]}
+    return a or b
+
+
 def _query_safe(where: dict | None, n_results: int, **kwargs) -> dict:
     """Führt eine ChromaDB-Query durch und reduziert n_results bei Bedarf."""
     base: dict = {"n_results": n_results, "include": ["documents", "distances"], **kwargs}
@@ -47,19 +63,22 @@ def _query_safe(where: dict | None, n_results: int, **kwargs) -> dict:
 
 
 def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, str, float]:
-    where = {"source": {"$in": STUDIENGANG_FILES[studiengang]}} if studiengang and studiengang in STUDIENGANG_FILES else None
+    where = _studiengang_where(studiengang)
 
-    # Modul-ID erkannt → Volltext-Suche per ID (semantisches Embedding taugt nicht für IDs)
+    # Modul-ID erkannt → exakter Metadaten-Treffer (module_id), sonst Volltext-Fallback
+    # (semantisches Embedding taugt nicht für IDs)
     module_match = MODULE_ID_RE.search(query)
     if module_match:
         module_id = module_match.group()
-        id_results = _query_safe(where, 3, query_texts=[query], where_document={"$contains": module_id})
+        id_results = _query_safe(_combine(where, {"module_id": module_id}), 3, query_texts=[query])
+        if not id_results["documents"][0]:
+            id_results = _query_safe(where, 3, query_texts=[query], where_document={"$contains": module_id})
         if id_results["documents"][0]:
             kontext = "\n\n".join(doc[:600] for doc in id_results["documents"][0])
             anweisung = (
                 "Der folgende Kontext aus der KIT-Wissensdatenbank enthält Informationen zum genannten Modul. "
                 "Beantworte die Frage auf Basis dieses Kontexts. "
-                "Nenne das Modul nur mit seinem vollständigen Klarnamen, ohne die ID-Nummer."
+                "Nenne den vollständigen Klarnamen des Moduls; die Modulnummer nur, wenn ausdrücklich danach gefragt wird."
             )
             return kontext, anweisung, 0.1
 

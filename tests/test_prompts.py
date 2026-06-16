@@ -114,7 +114,7 @@ def test_build_rag_context_studiengang_filter():
         from app.rag import build_rag_context
         build_rag_context("Testfrage", studiengang="winfo_bsc")
     call_kwargs = mock_collection.query.call_args.kwargs
-    assert call_kwargs["where"] == {"source": {"$in": ["mhb_wiinf_BSc_de_aktuell.pdf"]}}
+    assert call_kwargs["where"] == {"$or": [{"program": "winfo_bsc"}, {"program": "all"}]}
 
 def test_build_rag_context_no_studiengang_no_filter():
     with patch("app.rag.collection") as mock_collection:
@@ -137,3 +137,55 @@ def test_rag_fallback_no_disclaiming():
         _, anweisung, _ = build_rag_context("Testfrage")
     assert "ergänze am Ende" not in anweisung
     assert "nicht in jeder Antwort" in anweisung
+
+
+# ── TP2: Modul-ID + Studiengang $or-Filter ────────────────
+def test_module_id_regex_matches_m_and_t():
+    from app.rag import MODULE_ID_RE
+    assert MODULE_ID_RE.search("Info zu M-WIWI-101430 bitte").group() == "M-WIWI-101430"
+    assert MODULE_ID_RE.search("und T-MATH-109944 dazu").group() == "T-MATH-109944"
+
+
+def test_build_rag_context_studiengang_or_filter():
+    with patch("app.rag.collection") as mock_collection:
+        mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.2]]}
+        from app.rag import build_rag_context
+        build_rag_context("Testfrage", studiengang="winfo_bsc")
+    where = mock_collection.query.call_args.kwargs.get("where")
+    assert where == {"$or": [{"program": "winfo_bsc"}, {"program": "all"}]}
+
+
+def test_build_rag_context_module_id_exact_lookup():
+    with patch("app.rag.collection") as mock_collection:
+        mock_collection.query.return_value = {
+            "documents": [["Modul: Angewandte Informatik [M-WIWI-101430] ..."]],
+            "distances": [[0.2]],
+        }
+        from app.rag import build_rag_context
+        _, _, distanz = build_rag_context("Was ist M-WIWI-101430?")
+    first_where = mock_collection.query.call_args_list[0].kwargs.get("where")
+    assert first_where == {"module_id": "M-WIWI-101430"}
+    assert distanz == 0.1
+
+
+def test_build_rag_context_module_id_with_studiengang_combines():
+    with patch("app.rag.collection") as mock_collection:
+        mock_collection.query.return_value = {
+            "documents": [["Modul: X [M-WIWI-101430]"]],
+            "distances": [[0.2]],
+        }
+        from app.rag import build_rag_context
+        build_rag_context("Infos zu M-WIWI-101430?", studiengang="winfo_bsc")
+    first_where = mock_collection.query.call_args_list[0].kwargs.get("where")
+    assert first_where == {"$and": [
+        {"$or": [{"program": "winfo_bsc"}, {"program": "all"}]},
+        {"module_id": "M-WIWI-101430"},
+    ]}
+
+
+def test_prompt_module_number_only_on_request():
+    from app.prompts import build_prompt
+    for mode in ("text", "voice"):
+        p = build_prompt(mode, "de")
+        assert "wenn ausdrücklich danach gefragt" in p
+        assert "komplett weg" not in p

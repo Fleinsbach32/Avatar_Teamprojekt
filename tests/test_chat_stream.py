@@ -189,7 +189,7 @@ def test_chat_studiengang_passes_filter_to_rag(mock_client, mock_collection):
     })
 
     call_kwargs = mock_collection.query.call_args.kwargs
-    assert call_kwargs.get("where") == {"source": {"$in": ["mhb_wiinf_BSc_de_aktuell.pdf"]}}
+    assert call_kwargs.get("where") == {"$or": [{"program": "winfo_bsc"}, {"program": "all"}]}
 
 
 @patch("app.rag.collection")
