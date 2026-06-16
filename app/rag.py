@@ -46,6 +46,24 @@ def _combine(a: dict | None, b: dict | None) -> dict | None:
     return a or b
 
 
+_NUMBER_Q_RE = re.compile(
+    r'(?:modul-?nummer|nummer|kennung|modul-?id)\s+(?:von|für|fuer|des|zum|zur|der)\s+'
+    r'(?:(?:dem|der|das|die|den|modul)\s+)*(.+?)[\?\.!]*\s*$',
+    re.IGNORECASE,
+)
+
+
+def _module_name_from_number_question(query: str) -> str | None:
+    """Erkennt Fragen wie 'Wie lautet die Modulnummer von <Name>?' und gibt
+    <Name> zurück. So kann die semantische Suche mit dem Modulnamen laufen statt
+    mit der Füllfrage (deren Embedding sonst das falsche Modul trifft)."""
+    m = _NUMBER_Q_RE.search(query)
+    if m:
+        name = m.group(1).strip().strip('"\'')
+        return name or None
+    return None
+
+
 def _query_safe(where: dict | None, n_results: int, **kwargs) -> dict:
     """Führt eine ChromaDB-Query durch und reduziert n_results bei Bedarf."""
     base: dict = {"n_results": n_results, "include": ["documents", "distances"], **kwargs}
@@ -81,6 +99,28 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
                 "Nenne den vollständigen Klarnamen des Moduls; die Modulnummer nur, wenn ausdrücklich danach gefragt wird."
             )
             return kontext, anweisung, 0.1
+
+    # "Modulnummer von <Name>?" → Volltext-Treffer auf den Modulnamen.
+    # Semantische Suche rankt kurze Namen unzuverlässig, daher where_document
+    # $contains (mit Groß-/Kleinschreibungs-Varianten gegen Case-Sensitivität).
+    name_query = _module_name_from_number_question(query)
+    if name_query:
+        name_results = {"documents": [[]], "distances": [[]]}
+        for variant in dict.fromkeys([name_query, name_query.title(), name_query.capitalize()]):
+            name_results = _query_safe(where, 3, query_texts=[name_query],
+                                       where_document={"$contains": variant})
+            if name_results["documents"][0]:
+                break
+        if name_results["documents"][0]:
+            kontext = "\n\n".join(doc[:600] for doc in name_results["documents"][0])
+            anweisung = (
+                "Der folgende Kontext aus der KIT-Wissensdatenbank enthält Module mit ihren "
+                "Modulnummern (z. B. M-WIWI-101430). Beantworte die Frage auf Basis dieses Kontexts "
+                "und nenne die Modulnummer des gefragten Moduls, da ausdrücklich danach gefragt wurde. "
+                "Wähle das Modul, dessen Name am besten zur Frage passt."
+            )
+            distanz = name_results["distances"][0][0] if name_results["distances"][0] else 0.2
+            return kontext, anweisung, distanz
 
     # Standardsuche (semantisch)
     results = _query_safe(where, 3, query_texts=[query])

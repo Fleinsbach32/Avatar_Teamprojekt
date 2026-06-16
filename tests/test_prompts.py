@@ -183,6 +183,26 @@ def test_build_rag_context_module_id_with_studiengang_combines():
     ]}
 
 
+def test_module_name_extracted_from_number_question():
+    from app.rag import _module_name_from_number_question as extract
+    assert extract("Wie lautet die Modulnummer von Angewandte Informatik?") == "Angewandte Informatik"
+    assert extract("Nummer für das Modul Statistik") == "Statistik"
+    assert extract("Worum geht es im Modul Angewandte Informatik?") is None
+
+
+def test_build_rag_context_number_question_searches_by_name():
+    with patch("app.rag.collection") as mock_collection:
+        mock_collection.query.return_value = {
+            "documents": [["Modul: Angewandte Informatik [M-WIWI-101430] ..."]],
+            "distances": [[0.15]],
+        }
+        from app.rag import build_rag_context
+        _, anweisung, _ = build_rag_context("Wie lautet die Modulnummer von Angewandte Informatik?", studiengang="winfo_bsc")
+    # Suche lief mit dem Modulnamen, nicht der Füllfrage
+    assert mock_collection.query.call_args.kwargs["query_texts"] == ["Angewandte Informatik"]
+    assert "Modulnummer" in anweisung
+
+
 def test_prompt_module_number_only_on_request():
     from app.prompts import build_prompt
     for mode in ("text", "voice"):
