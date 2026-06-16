@@ -3,7 +3,7 @@
 Detaillierte Erklärung des Codes und der Methodik hinter der KIRA-Studienberatung
 (KIT) mit sprechendem Avatar.
 
-**Stand:** Juni 2026 · **Branch:** feature/tavus
+**Stand:** 16.06.2026 · **Branch:** feature/tavus
 
 ---
 
@@ -55,7 +55,9 @@ Das Backend ist in ein `app/`-Paket aufgeteilt (statt einer einzelnen
 | `app/session.py` | In-Memory-Sessions, TTL-Aufräumung, Satzanfang-Variation |
 | `static/index.html` | Komplettes Frontend (HTML + CSS + Vanilla-JS): Chat-Panel, Avatar-Einbindung, SSE-Konsum, Sprach-/Studiengang-Auswahl |
 | `scripts/fill_db.py` | Befüllt ChromaDB einmalig aus `data/faq.json` + PDFs aus `data/pdfs/` (Upsert in 5000er-Batches) |
+| `crawler.py` | BFS-Web-Crawler für wiwi.kit.edu: crawlt, chunked und befüllt ChromaDB direkt; unterstützt PDF-Extraktion, robots.txt, Shibboleth-Erkennung und Modul-Bewertungen |
 | `run.ps1` | Idempotenter Einzel-Start: .env-Validierung → ngrok + pip + DB-Befüllung (falls nötig) → ngrok-Tunnel → uvicorn |
+| `crawl.ps1` | Einzel-Befehl für den Crawler: pip → Crawl → ChromaDB-Einbettung; Modi: Standard, `-FillDbOnly`, `-InjectRatings` |
 | `tests/` | pytest-Tests; schwere Abhängigkeiten (ChromaDB, Gemini, Torch) sind in `conftest.py` gemockt |
 
 ---
@@ -144,13 +146,20 @@ sprachabhängigen Erweiterung zusammengesetzt (`build_prompt(mode, lang)`):
 
 - **`KIRA_BASE_PROMPT`** — sprach- und modusunabhängiger Kern: wer KIRA ist
   (freundliche, kompetente Studienberaterin), Aufgabe, Sicherheitsregeln
-  (Rollenwechsel-Versuche ignorieren) und das Nachfrage-Verhalten.
+  (Rollenwechsel-Versuche ignorieren), das Nachfrage-Verhalten und ein expliziter
+  „Wissensgrenzen"-Block: „nicht zuständig" ist nur bei echten Off-Topic-Fragen
+  erlaubt; bei Wissenslücken zu Studium/KIT gibt KIRA das ehrlich zu und verweist
+  auf campus.kit.edu.
 - **`KIRA_TEXT_EXT[lang]`** — Text-Regeln (DE/EN): fließende Sätze, keine Listen,
   Länge an die Frage angepasst (1–2 Sätze bei einfachen, 3–5 bei komplexen
-  Fragen), duzt, lehnt Themenfremdes höflich ab.
+  Fragen), duzt, lehnt Themenfremdes höflich ab. Verboten: Floskeln wie „Ich
+  verstehe, dass…", „Das ist eine gute Frage", Markdown-Formatierung.
 - **`KIRA_VOICE_EXT[lang]`** — Voice-Regeln (DE/EN): bewusst kürzer als der
   Text-Prompt, maximal 2–3 gut vorlesbare Sätze, keine Klammern/Abkürzungen,
-  variierte Satzanfänge.
+  variierte Satzanfänge, kein Markdown.
+- **Modul-ID-Regel:** Wird eine Modul-ID (z.B. `M-WIWI-101267`) genannt, sucht
+  KIRA sie zuerst in der Wissensbasis und antwortet mit dem Klarnamen — ohne die
+  ID zu nennen. Ist sie nicht gefunden, fragt KIRA nach dem Modulnamen.
 
 `/chat` ruft `build_prompt("text", lang)`, `/tavus/llm` ruft
 `build_prompt("voice", lang)`. So können sich gesprochene und getippte Antworten
@@ -178,18 +187,26 @@ Treffer-Qualität bekommt das Modell eine andere Anweisung.
   (mehrsprachig, gut für Deutsch, klein genug für CPU).
 
 **Abfrage (`build_rag_context()` in `app/rag.py`):**
+- **Modul-ID-Direktsuche:** Enthält die Frage eine ID der Form `M-[A-Z]+-\d+`,
+  läuft zuerst eine `where_document={"$contains": module_id}`-Query (Volltext-
+  Match ohne Embedding). Liefert sie Ergebnisse, werden diese direkt mit einer
+  eigenen Anweisung ans Modell übergeben.
 - Die Nutzerfrage wird embedded und gegen die Collection verglichen;
-  die 3 ähnlichsten Dokumente bilden den Kontext (je auf 400 Zeichen gekürzt).
+  die 3 ähnlichsten Dokumente bilden den Kontext (je auf 600 Zeichen gekürzt).
 - **Studiengang-Filter:** Wird ein Studiengang gewählt, schränkt ein
   `where`-Filter die Suche über `STUDIENGANG_FILES` auf das zugehörige
   Modulhandbuch-PDF ein (Mapping Studiengang-Schlüssel → Dateiname). Ohne
   Auswahl wird die gesamte Wissensbasis durchsucht.
 - **Distanz-Schwelle 0.45:** Ist das beste Dokument näher als 0.45, gilt die
-  Wissensbasis als zuständig → Anweisung "antworte ausschließlich auf Basis
-  des Kontexts". Ist die Distanz größer, fällt das System auf allgemeines
-  Hochschulwissen zurück; nur bei verbindlichen Fristen/Regelungen empfiehlt
-  KIRA beiläufig eine Bestätigung beim Prüfungsamt (bewusst **nicht** als
-  Pflicht-Anhang an jede Antwort).
+  Wissensbasis als zuständig → Anweisung „Nutze den Kontext wenn er zur Frage
+  passt; sonst ignoriere ihn und nutze allgemeines Hochschulwissen." (Vorher:
+  „ausschließlich auf Basis des Kontexts" — führte dazu, dass KIRA bei falsch
+  retrievten Chunks irrelevante Inhalte wiedergab.) Ist die Distanz größer,
+  fällt das System auf allgemeines Hochschulwissen zurück.
+- **`_query_safe()`-Fallback:** Wirft ChromaDB bei `n_results=3` einen Fehler
+  (z.B. wenn der Filter nur 1 Dokument trifft), wird automatisch mit
+  `n_results=1` wiederholt; schlägt auch das fehl, kommt ein leeres Ergebnis
+  zurück statt eines Server-Fehlers.
 - Das `done`-Event meldet die Quelle ("Wissensbasis" oder "LLM") ans Frontend,
   das sie unter der Antwort anzeigt.
 
@@ -277,6 +294,8 @@ $env:PYTHONIOENCODING="utf-8"; python -m pytest tests/ -v
 
 ## 9. Betrieb
 
+### Server starten
+
 ```powershell
 .\run.ps1
 ```
@@ -287,9 +306,36 @@ ngrok-Tunnels (gibt die öffentliche URL aus) und uvicorn auf Port 8000 mit
 `--reload` (Modulpfad `app.main:app`). Folgeaufrufe überspringen erledigte
 Schritte (pip via `.pip-stamp`, ngrok via Tunnel-Probe auf Port 4040).
 
-Für den **gesprochenen** Tavus-Pfad wird die ausgegebene ngrok-URL im
-Tavus-Dashboard in der Persona als Custom-LLM-URL eingetragen (Root-URL oder mit
-`/tavus/llm` — beides funktioniert).
+### HTTP Basic Auth
+
+Der Server verlangt HTTP-Basic-Authentifizierung auf allen Routen außer
+`/health`. Credentials werden über `.env` gesetzt:
+
+```
+APP_USERNAME=admin
+APP_PASSWORD=geheim
+```
+
+Der Browser zeigt automatisch ein Login-Fenster. Für den **gesprochenen**
+Tavus-Pfad müssen die Credentials direkt in der Custom-LLM-URL kodiert werden,
+da Tavus-Server keine Browser-Auth-Dialoge nutzen können:
+
+```
+https://user:passwort@meine-ngrok-url.ngrok.app/tavus/llm
+```
+
+### Wissensbasis neu crawlen
+
+```powershell
+.\crawl.ps1                   # Standard: pip installieren + crawlen + ChromaDB befuellen
+.\crawl.ps1 -MaxPages 200     # Schneller Testlauf
+.\crawl.ps1 -FillDbOnly       # Nur vorhandene JSON-Dateien in ChromaDB einbetten
+.\crawl.ps1 -InjectRatings    # Nur Modulbewertungen aus module_ratings.json einpflegen
+```
+
+`crawl.ps1` installiert fehlende pip-Pakete (einmalig via `.pip-stamp`), startet
+den BFS-Crawler für wiwi.kit.edu und befüllt anschließend ChromaDB. Gecrawlte
+JSON-Dateien landen in `crawled_data/` (in `.gitignore`).
 
 ---
 
@@ -303,7 +349,8 @@ Tavus-Dashboard in der Persona als Custom-LLM-URL eingetragen (Root-URL oder mit
 - **CORS ist offen** (`allow_origins=["*"]`) — für Produktion einschränken.
 - **Gesprochener Pfad ohne Satzanfang-Variation:** `/tavus/llm` hat keine
   Session-ID, daher greift die Variation dort nicht.
-- **Keine Authentifizierung / kein Rate-Limiting** — für den Demo-Betrieb
-  ausgelegt.
+- **HTTP Basic Auth aktiviert, kein Rate-Limiting** — für den öffentlichen
+  Demo-Betrieb reicht Basic Auth; für Produktion zusätzlich Rate-Limiting
+  vorschalten.
 - Der frühere Google-API-Key liegt in der Git-Historie (Commits vor dieser
   Umbauphase) und sollte rotiert werden.
