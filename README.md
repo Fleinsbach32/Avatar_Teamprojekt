@@ -15,9 +15,21 @@
 
 Folgeaufrufe überspringen bereits erledigte Schritte automatisch.
 
+## Web-Authentifizierung
+
+Die UI ist per HTTP Basic Auth geschützt. Benutzer/Passwort werden in `.env`
+gesetzt (`APP_USERNAME`/`APP_PASSWORD`, Default `admin`/`geheim`). Geschützt sind
+alle Browser-Endpoints (`/`, `/chat`, `/avatar/config`, `/tavus/session|end|message|settings`).
+
+**Bewusst NICHT geschützt** sind die von Tavus CVI serverseitig aufgerufenen
+LLM-Endpoints (`/tavus/llm`, `/tavus/llm/chat/completions`, `/chat/completions`)
+sowie `/health` — Tavus kann keine Basic-Auth-Credentials mitsenden; eine Auth
+darauf würde den gesprochenen Avatar-Pfad mit 401 abbrechen.
+
 ## Voraussetzungen
 
-1. `.env` aus `.env.example` kopieren und mindestens `GOOGLE_API_KEY` setzen.
+1. `.env` aus `.env.example` kopieren und `GOOGLE_API_KEY` sowie
+   `APP_USERNAME`/`APP_PASSWORD` setzen.
 2. Für den Avatar (`AVATAR_PROVIDER=tavus`): zusätzlich `TAVUS_API_KEY` und `TAVUS_REPLICA_ID` setzen.
    Für den gesprochenen Pfad muss der Server öffentlich erreichbar sein — `run.ps1` startet dafür automatisch ngrok.
    Die ausgegebene ngrok-URL + `/tavus/llm` wird im **Tavus-Dashboard in der Persona** als Custom-LLM-URL hinterlegt — nicht in der `.env`.

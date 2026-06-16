@@ -5,10 +5,11 @@ import logging
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 
+from app.auth import check_auth
 from app.gemini import client, gemini_config, SSE_HEADERS
 from app.prompts import build_prompt
 from app.rag import build_rag_context
@@ -69,7 +70,7 @@ class TavusLLMRequest(BaseModel):
     studiengang: str | None = None
 
 
-@router.post("/tavus/settings")
+@router.post("/tavus/settings", dependencies=[Depends(check_auth)])
 async def tavus_settings(prefs: TavusPrefsRequest):
     """Aktualisiert Sprache/Studiengang für den laufenden Voice-Pfad."""
     active_voice_prefs["lang"] = prefs.lang
@@ -77,7 +78,7 @@ async def tavus_settings(prefs: TavusPrefsRequest):
     return {"status": "ok", **active_voice_prefs}
 
 
-@router.post("/tavus/session")
+@router.post("/tavus/session", dependencies=[Depends(check_auth)])
 async def tavus_session(prefs: TavusPrefsRequest | None = None):
     api_key = os.getenv("TAVUS_API_KEY")
     if not api_key:
@@ -118,7 +119,7 @@ async def tavus_session(prefs: TavusPrefsRequest | None = None):
             raise HTTPException(status_code=504, detail="Tavus API Timeout")
 
 
-@router.post("/tavus/end")
+@router.post("/tavus/end", dependencies=[Depends(check_auth)])
 async def tavus_end(request: TavusEndRequest):
     api_key = os.getenv("TAVUS_API_KEY", "")
     async with httpx.AsyncClient() as http:
@@ -133,7 +134,7 @@ async def tavus_end(request: TavusEndRequest):
     return {"status": "ended"}
 
 
-@router.post("/tavus/message")
+@router.post("/tavus/message", dependencies=[Depends(check_auth)])
 async def tavus_message(request: TavusMessageRequest):
     api_key = os.getenv("TAVUS_API_KEY")
     if not api_key:

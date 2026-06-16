@@ -46,6 +46,7 @@ Das Backend ist in ein `app/`-Paket aufgeteilt (statt einer einzelnen
 | Datei | Verantwortung |
 |---|---|
 | `app/main.py` | FastAPI-App-Wiring: Middleware, Router-Einbindung, Lifespan-Warmup, `/health`, `/` |
+| `app/auth.py` | HTTP Basic Auth (`check_auth`) für Browser-Endpoints; Tavus-LLM-Endpoints ausgenommen |
 | `app/routes/chat.py` | `POST /chat` — getippter Pfad (SSE-Stream, Text-Prompt) |
 | `app/routes/tavus.py` | `POST /tavus/session`, `/tavus/end`, `/tavus/message`, `/tavus/settings`, `/tavus/llm` (+ Aliase) — Voice-Pfad |
 | `app/routes/avatar.py` | `GET /avatar/config` — Provider-Konfiguration (derzeit nur Tavus) |
@@ -291,6 +292,17 @@ Für den **gesprochenen** Tavus-Pfad wird die ausgegebene ngrok-URL im
 Tavus-Dashboard in der Persona als Custom-LLM-URL eingetragen (Root-URL oder mit
 `/tavus/llm` — beides funktioniert).
 
+### Web-Authentifizierung
+
+Die Browser-Endpoints (`/`, `/chat`, `/avatar/config`,
+`/tavus/session|end|message|settings`) sind per HTTP Basic Auth geschützt
+(`app/auth.py`, Zugangsdaten aus `APP_USERNAME`/`APP_PASSWORD` in der `.env`,
+Default `admin`/`geheim`). Der Browser fragt die Zugangsdaten einmal ab und sendet
+sie danach automatisch mit. **Ausgenommen** sind die von Tavus serverseitig
+aufgerufenen LLM-Endpoints (`/tavus/llm`, `/tavus/llm/chat/completions`,
+`/chat/completions`) und `/health` — Tavus kann keine Credentials senden, eine
+Auth darauf würde den gesprochenen Avatar-Pfad mit 401 abbrechen.
+
 ---
 
 ## 10. Bekannte Grenzen
@@ -303,7 +315,8 @@ Tavus-Dashboard in der Persona als Custom-LLM-URL eingetragen (Root-URL oder mit
 - **CORS ist offen** (`allow_origins=["*"]`) — für Produktion einschränken.
 - **Gesprochener Pfad ohne Satzanfang-Variation:** `/tavus/llm` hat keine
   Session-ID, daher greift die Variation dort nicht.
-- **Keine Authentifizierung / kein Rate-Limiting** — für den Demo-Betrieb
-  ausgelegt.
+- **Auth nur als HTTP Basic, kein Rate-Limiting** — einfacher Passwortschutz für
+  die UI (siehe Abschnitt 9); für Produktion ggf. stärkeres Auth-Verfahren und
+  Rate-Limiting ergänzen.
 - Der frühere Google-API-Key liegt in der Git-Historie (Commits vor dieser
   Umbauphase) und sollte rotiert werden.
