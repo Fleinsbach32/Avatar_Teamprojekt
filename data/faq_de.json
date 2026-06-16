@@ -1,0 +1,174 @@
+[
+  {
+    "question": "Bis wann muss ich mich für das Sommersemester am KIT bewerben?",
+    "answer": "Der Bewerbungsschluss für das Sommersemester ist der 15. Januar, für das Wintersemester der 15. Juli. Internationale Studierende haben Fristen etwa 6 Wochen früher."
+  },
+  {
+    "question": "Was ist der Numerus Clausus (NC) am KIT?",
+    "answer": "Der NC ist der Notendurchschnitt des zuletzt zugelassenen Bewerbers im Vorjahr und variiert je nach Studiengang und Semester. Neben der Note zählen auch Wartezeiten bei der Platzvergabe."
+  },
+  {
+    "question": "Wie bewerbe ich mich für einen WiWi-Studiengang am KIT?",
+    "answer": "Zulassungsbeschränkte Studiengänge wie WiIng und TVWL werden über hochschulstart.de beworben, zulassungsfreie Studiengänge direkt über das KIT-Bewerbungsportal. Du benötigst Abiturzeugnis, Lichtbildausweis und gegebenenfalls Sprachnachweise."
+  },
+  {
+    "question": "Welche Bachelorstudiengänge bietet die WiWi-Fakultät an?",
+    "answer": "Die WiWi-Fakultät bietet Wirtschaftsingenieurwesen (WiIng), Technische Volkswirtschaftslehre (TVWL), Wirtschaftsinformatik (WiInf), Wirtschaftsmathematik (WiMa) und Digital Economics an. Alle Studiengänge umfassen 6 Semester und 180 ECTS."
+  },
+  {
+    "question": "Welche Masterstudiengänge bietet die WiWi-Fakultät an?",
+    "answer": "Die WiWi-Fakultät bietet WiIng, TVWL, WiInf, WiMa, Digital Economics sowie den englischsprachigen Master Industrial Engineering and Management (IEAM) an. Alle Masterstudiengänge umfassen 4 Semester und 120 ECTS."
+  },
+  {
+    "question": "Was muss ich als Erstsemester zuerst erledigen?",
+    "answer": "Zuerst musst du dein KIT-Konto im SCC Self-Service Portal aktivieren und dein E-Mail-Postfach einrichten. Danach solltest du die KIT-Card mit Portraitbild beantragen, MS Teams freischalten, Eduroam-WLAN einrichten, deinen Stundenplan in CAS erstellen und dich für die O-Phase anmelden."
+  },
+  {
+    "question": "Was ist die O-Phase und sollte ich daran teilnehmen?",
+    "answer": "Die O-Phase ist eine freiwillige Einführungswoche der Fachschaft vor Vorlesungsbeginn. Die Teilnahme ist sehr empfehlenswert, weil du dabei Kommilitonen kennenlernst und wichtige Informationen zum Studium erhältst."
+  },
+  {
+    "question": "Wann beginnen die Vorlesungen am KIT?",
+    "answer": "Das Wintersemester beginnt Ende Oktober und das Sommersemester Mitte April. Die genauen Termine variieren leicht von Jahr zu Jahr."
+  },
+  {
+    "question": "Wie erstelle ich meinen Stundenplan am KIT?",
+    "answer": "Du meldest dich im CAS mit deinem u-Kürzel an, suchst die Veranstaltungen im Vorlesungsverzeichnis und fügst sie zu deinen Favoriten hinzu – sie erscheinen dann automatisch in deinem Stundenplan. Tutorien buchst du in der ersten Vorlesungswoche über YouSubscribe im WiWi-Portal."
+  },
+  {
+    "question": "Wie melde ich mich am KIT für Prüfungen an?",
+    "answer": "Die Prüfungsanmeldung erfolgt über CAS, meist 4 bis 6 Wochen vor dem Prüfungstermin. Verpasste Fristen können nicht nachträglich verlängert werden, daher solltest du dein KIT-Postfach regelmäßig abrufen, da wichtige Informationen per E-Mail kommen."
+  },
+  {
+    "question": "Ich habe eine Prüfung nicht bestanden. Was kann ich tun?",
+    "answer": "Es gibt insgesamt drei Versuche, also einen Erst- und zwei Wiederholungsversuche. Bei endgültigem Nichtbestehen droht die Exmatrikulation aus dem Studiengang. Das WiWi-Prüfungssekretariat und die Fachschaft beraten dich individuell."
+  },
+  {
+    "question": "Wie funktioniert die Klausureinsicht am KIT?",
+    "answer": "Du kannst innerhalb eines Monats nach Bekanntgabe des Ergebnisses Einsicht in deine Klausur nehmen. Einsichtstermine werden per Mail angekündigt. Du darfst Notizen machen und bei berechtigtem Interesse, etwa bei Einwänden gegen die Bewertung, auch Kopien anfertigen. Pro Stunde Bearbeitungszeit stehen dir mindestens 10 Minuten Einsichtszeit zu."
+  },
+  {
+    "question": "Was ist das Pflichtpraktikum für WiIng und TVWL?",
+    "answer": "Das Pflichtpraktikum umfasst mindestens 12 Wochen und bringt 10 ECTS. Es kann auf maximal drei Einzelpraktika à mindestens 4 Wochen aufgeteilt werden, mit mindestens 20 Stunden pro Woche an 5 Tagen. Maximal 3 Krankheitstage werden ohne Nachholpflicht akzeptiert. Der Nachweis muss spätestens zur Zulassung zur Bachelorarbeit vorliegen."
+  },
+  {
+    "question": "Was muss ich für das Pflichtpraktikum einreichen?",
+    "answer": "Du musst eine original unterschriebene Unternehmensbescheinigung mit Angaben zu Dauer, Arbeitszeit, Fehltagen, Abteilungen und Tätigkeiten sowie einen vom Unternehmen gegengezeichneten Praktikumsbericht einreichen."
+  },
+  {
+    "question": "Wie viel Semesterbeitrag zahle ich am KIT?",
+    "answer": "Der Semesterbeitrag beträgt ca. 187 Euro pro Semester und enthält das KVV-Semesterticket, den Studentenwerksbeitrag und den AStA-Beitrag."
+  },
+  {
+    "question": "Wann und wie muss ich mich am KIT rückmelden?",
+    "answer": "Die Rückmeldung erfolgt durch Zahlung des Semesterbeitrags innerhalb der Rückmeldefrist, die meist 6 bis 8 Wochen vor Semesterbeginn liegt. Ohne Rückmeldung wirst du automatisch exmatrikuliert."
+  },
+  {
+    "question": "Kann ich mein Studium am KIT unterbrechen?",
+    "answer": "Ja, eine Beurlaubung ist aus wichtigen Gründen wie Krankheit, Auslandssemester, Praktikum oder Schwangerschaft möglich. Der Antrag muss vor Semesterbeginn beim Studierendensekretariat gestellt werden. Im Urlaubssemester sind keine Prüfungen möglich und BAföG wird in der Regel nicht weitergezahlt."
+  },
+  {
+    "question": "Wie beantrage ich BAföG?",
+    "answer": "BAföG wird beim Studierendenwerk Karlsruhe beantragt, nicht an der Universität. Der Antrag kann online über das BAföG-Digital-Portal gestellt werden. Benötigt werden Einkommensnachweise der Eltern, die Immatrikulationsbescheinigung und der Personalausweis. Die Bearbeitung dauert ca. 4 bis 8 Wochen."
+  },
+  {
+    "question": "Wie funktioniert das Semesterticket am KIT?",
+    "answer": "Das Semesterticket ist im Semesterbeitrag enthalten und gilt im gesamten KVV-Netz in Karlsruhe und Umgebung. Es ist zusammen mit der KIT-Card gültig."
+  },
+  {
+    "question": "Wie kann ich den Studiengang wechseln?",
+    "answer": "Ein Fachwechsel ist zum nächsten Semester möglich, indem du dich für den neuen Studiengang anmeldest und aus dem alten abmeldest. Bereits erbrachte Leistungen können vom Prüfungssekretariat des neuen Studiengangs angerechnet werden."
+  },
+  {
+    "question": "Wie läuft ein Auslandssemester für WiWi-Studierende ab?",
+    "answer": "Die Bewerbung erfolgt über das IRO der WiWi-Fakultät, ca. 9 bis 12 Monate im Voraus. Es gibt etwa 70 Partnerhochschulen weltweit und Leistungen werden über ein vorab vereinbartes Learning Agreement angerechnet."
+  },
+  {
+    "question": "Was ist das Learning Agreement?",
+    "answer": "Das Learning Agreement ist ein verbindliches Dokument, das vor dem Auslandssemester festlegt, welche Kurse du im Ausland belegst und wie sie an der WiWi-Fakultät angerechnet werden. Es muss von dir, der Heimat- und der Gasthochschule unterschrieben werden."
+  },
+  {
+    "question": "Wie erhalte ich Zugang zu WLAN und IT-Services am KIT?",
+    "answer": "Nach der Immatrikulation erhältst du ein KIT-Konto mit u-Kürzel, das im SCC Self-Service Portal aktiviert werden muss. Damit hast du Zugang zu Eduroam-WLAN, deiner KIT-E-Mail-Adresse, ILIAS, CAS, MS Teams, VPN und Microsoft Office 365."
+  },
+  {
+    "question": "Was ist ILIAS?",
+    "answer": "ILIAS ist die Lernplattform des KIT, auf der du Vorlesungsunterlagen, Übungsblätter und Kursmaterialien findest. Du loggst dich mit deinem KIT-u-Kürzel ein. Wichtig: ILIAS-Nachrichten allein reichen nicht, da studienrelevante Informationen auch per E-Mail kommen."
+  },
+  {
+    "question": "Was ist CAS?",
+    "answer": "CAS ist das Campus-Management-System des KIT. Dort meldest du dich für Prüfungen an und ab, siehst deine Noten und deinen Studienablaufplan, erstellst deinen Stundenplan und buchst SQ-Leistungen."
+  },
+  {
+    "question": "Was sind Schlüsselqualifikationen (SQ) und wie viele brauche ich?",
+    "answer": "Schlüsselqualifikationen sind überfachliche Kompetenzen wie Präsentation, Projektmanagement oder Sprachen. WiWi-Studierende müssen je nach Studiengang 6 ECTS im SQ-Bereich erbringen, zum Beispiel über das HoC, ZAK oder das Sprachenzentrum. Die Verbuchung erfolgt selbst in CAS unter dem Punkt ÜQ/SQ-Leistung."
+  },
+  {
+    "question": "Wie beantrage ich eine Anerkennung von Studienleistungen?",
+    "answer": "Du stellst einen Antrag mit dem entsprechenden Formular beim WiWi-Prüfungssekretariat. Für Auslandsleistungen gibt es ein separates Formular, beide sind auf wiwi.kit.edu verfügbar."
+  },
+  {
+    "question": "Was ist die Fachschaft WiWi und was macht sie?",
+    "answer": "Die Fachschaft WiWi ist die studentische Interessenvertretung der WiWi-Studierenden am KIT. Sie bietet Altklausuren, Prüfungsprotokolle, Studien-, Sozial- und Rechtsberatung sowie Veranstaltungen wie die O-Phase und die Absolventenfeier an. Die Sprechstunde findet Mo bis Fr von 11:30 bis 13:30 Uhr in Gebäude 05.20, Raum 1C-03.2, statt. In der vorlesungsfreien Zeit nur mittwochs von 11:30 bis 14:00 Uhr."
+  },
+  {
+    "question": "Wo finde ich Altklausuren und Prüfungsprotokolle?",
+    "answer": "Altklausuren und Prüfungsprotokolle gibt es bei der Fachschaft WiWi. Du kannst sie in der Sprechstunde kaufen oder online auf fachschaft.org einsehen."
+  },
+  {
+    "question": "Was ist das 4KommaNull-Programm?",
+    "answer": "Das 4KommaNull-Programm richtet sich an Spitzenstudierende der WiWi-Fakultät mit einem Schnitt von 1,3 oder besser und bietet Vernetzung, exklusive Veranstaltungen und Unternehmenskontakte."
+  },
+  {
+    "question": "Wie melde ich meine Bachelorarbeit an?",
+    "answer": "Du suchst zunächst einen betreuenden Lehrstuhl und reichst dann das Anmeldeformular beim Prüfungssekretariat ein. Die Bearbeitungszeit beträgt 13 Wochen und Voraussetzung ist eine Mindest-ECTS-Zahl gemäß deiner Studien- und Prüfungsordnung."
+  },
+  {
+    "question": "Was ist Eucor?",
+    "answer": "Eucor ist ein Hochschulverbund am Oberrhein bestehend aus KIT, Uni Freiburg, Uni Basel, Uni Strasbourg und Haute-Alsace. WiWi-Studierende können Kurse an den Partnerhochschulen belegen und anrechnen lassen."
+  },
+  {
+    "question": "Darf ich generative KI wie ChatGPT bei Seminar- und Abschlussarbeiten nutzen?",
+    "answer": "Ja, aber die Nutzung muss transparent dokumentiert werden, zum Beispiel in einer Tabelle mit den betroffenen Textstellen, verwendeten Prompts und dem Grad der eigenen Nachbearbeitung. Nicht deklarierte KI-Nutzung gilt als Täuschungsversuch und Fehler der KI zählen als eigene Fehler. Die genauen Regeln legt jeder Lehrstuhl individuell fest."
+  },
+  {
+    "question": "Wo finde ich das aktuelle Modulhandbuch für meinen Studiengang?",
+    "answer": "Die aktuellen Modulhandbücher findest du auf wiwi.kit.edu unter dem jeweiligen Studiengang. Es gibt jeweils deutsche und englische Versionen sowie separate Handbücher für Bachelor und Master."
+  },
+  {
+    "question": "Was ist ein entschleunigter Studienplan?",
+    "answer": "Ein entschleunigter Studienplan ermöglicht es, das Studium über mehr Semester zu verteilen, zum Beispiel bei Krankheit, Behinderung, Kinderbetreuung oder Spitzensport. Ansprechpartner ist die WiWi-Studienberatung."
+  },
+  {
+    "question": "Was ist der Nachteilsausgleich und wie beantrage ich ihn?",
+    "answer": "Studierende mit Behinderung oder chronischer Erkrankung können einen Nachteilsausgleich beantragen, zum Beispiel eine Zeitverlängerung bei Prüfungen. Der Antrag wird beim WiWi-Prüfungssekretariat mit ärztlichem Attest gestellt."
+  },
+  {
+    "question": "Gibt es Vorkurse am KIT für Erstsemester?",
+    "answer": "Das MINT-Kolleg bietet vor Vorlesungsbeginn im September und Oktober Mathe- und Informatik-Vorkurse an. Der Mathevorkurs ist für WiWi-Studierende besonders empfehlenswert. Die Anmeldung ist ab dem 15. Juli möglich und die Plätze sind begrenzt."
+  },
+  {
+    "question": "Kann ich kostenlos Sprachkurse am KIT belegen?",
+    "answer": "Ja, als KIT-Studierender kannst du pro Semester einen kostenlosen Sprachkurs am Sprachenzentrum belegen. Die Kurse sind schnell ausgebucht und können als Schlüsselqualifikationen angerechnet werden."
+  },
+  {
+    "question": "Wie bekomme ich eine Immatrikulationsbescheinigung?",
+    "answer": "Du kannst deine Immatrikulationsbescheinigung jederzeit selbst in CAS herunterladen. Sie wird für BAföG, Kindergeld, Krankenversicherung und viele Vergünstigungen benötigt."
+  },
+  {
+    "question": "Gibt es psychologische Beratung für Studierende am KIT?",
+    "answer": "Das Studierendenwerk Karlsruhe bietet kostenlose psychologische Beratung an. Die Fachschaft WiWi bietet zusätzlich Sozial- und Rechtsberatung an."
+  },
+  {
+    "question": "Wie kann ich mich am KIT exmatrikulieren?",
+    "answer": "Du stellst einen schriftlichen Antrag beim KIT-Studierendensekretariat. Die Exmatrikulation wird zum Ende des laufenden Semesters wirksam und du musst dabei die KIT-Card zurückgeben."
+  },
+  {
+    "question": "Welche Wohnmöglichkeiten gibt es für Studierende in Karlsruhe?",
+    "answer": "Das Studierendenwerk vermittelt Wohnheimplätze und Privatzimmer. Da der Wohnungsmarkt besonders von September bis November sehr angespannt ist, solltest du so früh wie möglich mit der Suche beginnen."
+  },
+  {
+    "question": "Was ist das WiWi-Portal?",
+    "answer": "Das WiWi-Portal unter portal.wiwi.kit.edu ist das fakultätseigene Studierendenportal. Du meldest dich mit deinem u-Kürzel an und kannst dich dort über YouSubscribe für Tutorien und Übungsgruppen anmelden."
+  }
+]

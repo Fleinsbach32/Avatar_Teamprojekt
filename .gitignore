@@ -3,5 +3,7 @@ __pycache__/
 *.pyc
 chroma_db/
 data/chroma_db.zip
+crawled_data/
 .superpowers/
 tests/__pycache__/
+.pip-stamp
