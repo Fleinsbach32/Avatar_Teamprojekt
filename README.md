@@ -9,7 +9,7 @@
 `run.ps1` ist idempotent und übernimmt alles in einem Befehl:
 - prüft die `.env`
 - installiert beim ersten Aufruf ngrok und die Python-Abhängigkeiten
-- befüllt die ChromaDB beim ersten Start (`fill_db.py`)
+- befüllt die ChromaDB beim ersten Start (`scripts/fill_db.py`)
 - startet ngrok im Hintergrund und gibt die öffentliche URL aus
 - startet den Server auf http://localhost:8000
 
@@ -51,7 +51,7 @@ Als Custom-LLM-URL kann entweder die ngrok-Root (`https://<id>.ngrok-free.dev`) 
   - `app/rag.py`: ChromaDB-Abfrage mit optionalem Studiengang-Filter
   - `app/session.py`: In-Memory-Sessions
 - **Frontend:** `static/index.html` — Chat-Panel + Tavus-Avatar (Daily.co).
-- **Wissensbasis:** `fill_db.py` lädt `data/faq.json` + PDFs in ChromaDB.
+- **Wissensbasis:** `scripts/fill_db.py` lädt `data/faq.json` + PDFs in ChromaDB.
 
 ## Tests
 

@@ -2,5 +2,6 @@
 __pycache__/
 *.pyc
 chroma_db/
+data/chroma_db.zip
 .superpowers/
 tests/__pycache__/

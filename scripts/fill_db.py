@@ -9,7 +9,7 @@ embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
 
 CHROMA_PATH = r"chroma_db"
 FAQ_PATH = r"data/faq.json"
-PDF_FOLDER = r"data"
+PDF_FOLDER = r"data/pdfs"
 
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
 collection = chroma_client.get_or_create_collection(
@@ -32,7 +32,7 @@ for item in faqs:
     metadatas.append({"source": "faq", "question": item["question"]})
     counter += 1
 
-print(f"📄 {len(faqs)} FAQ-Einträge geladen")
+print(f"[FAQ] {len(faqs)} FAQ-Eintraege geladen")
 
 # ── 2. PDFs laden & chunken ───────────────────────────────
 import os
@@ -74,7 +74,7 @@ for filename in os.listdir(PDF_FOLDER):
         chunk_count += 1
 
     pdf_count += 1
-    print(f"📑 {filename}: {chunk_count} Chunks geladen")
+    print(f"[PDF] {filename}: {chunk_count} Chunks geladen")
 
 # ── 3. Alles in ChromaDB speichern (in 5000er-Batches) ───
 BATCH_SIZE = 5000
@@ -86,5 +86,5 @@ for i in range(0, len(documents), BATCH_SIZE):
     )
     print(f"   Batch {i // BATCH_SIZE + 1}: {min(i + BATCH_SIZE, len(documents))}/{len(documents)} gespeichert")
 
-print(f"\n✅ Gesamt in ChromaDB: {len(documents)} Einträge")
-print(f"   → {len(faqs)} FAQ + {chunk_count} PDF-Chunks")
+print(f"\n[FERTIG] Gesamt in ChromaDB: {len(documents)} Eintraege")
+print(f"   -> {len(faqs)} FAQ + {chunk_count} PDF-Chunks")

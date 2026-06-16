@@ -79,8 +79,8 @@ $env:PYTHONIOENCODING = "utf-8"
 # --- 5. ChromaDB befuellen (einmalig) --------------------
 if (!(Test-Path "chroma_db")) {
     Write-Host "ChromaDB wird befuellt (einmalig, kann mehrere Minuten dauern)..." -ForegroundColor Cyan
-    python fill_db.py
-    if ($LASTEXITCODE -ne 0) { Write-Host "FEHLER: fill_db.py fehlgeschlagen." -ForegroundColor Red; exit 1 }
+    python scripts/fill_db.py
+    if ($LASTEXITCODE -ne 0) { Write-Host "FEHLER: scripts/fill_db.py fehlgeschlagen." -ForegroundColor Red; exit 1 }
 }
 
 # --- 6. ngrok starten (falls nicht schon aktiv) ----------

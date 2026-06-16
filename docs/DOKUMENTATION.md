@@ -54,7 +54,7 @@ Das Backend ist in ein `app/`-Paket aufgeteilt (statt einer einzelnen
 | `app/gemini.py` | Gemini-Client, `gemini_config()`, SSE-Header |
 | `app/session.py` | In-Memory-Sessions, TTL-Aufräumung, Satzanfang-Variation |
 | `static/index.html` | Komplettes Frontend (HTML + CSS + Vanilla-JS): Chat-Panel, Avatar-Einbindung, SSE-Konsum, Sprach-/Studiengang-Auswahl |
-| `fill_db.py` | Befüllt ChromaDB einmalig aus `data/faq.json` + PDF-Dokumenten (Upsert in 5000er-Batches) |
+| `scripts/fill_db.py` | Befüllt ChromaDB einmalig aus `data/faq.json` + PDFs aus `data/pdfs/` (Upsert in 5000er-Batches) |
 | `run.ps1` | Idempotenter Einzel-Start: .env-Validierung → ngrok + pip + DB-Befüllung (falls nötig) → ngrok-Tunnel → uvicorn |
 | `tests/` | pytest-Tests; schwere Abhängigkeiten (ChromaDB, Gemini, Torch) sind in `conftest.py` gemockt |
 
@@ -168,10 +168,10 @@ Treffer-Qualität bekommt das Modell eine andere Anweisung.
 
 ## 5. RAG-Methodik (Retrieval-Augmented Generation)
 
-**Befüllung (`fill_db.py`):**
+**Befüllung (`scripts/fill_db.py`):**
 - FAQ-Einträge aus `data/faq.json` werden als "Frage: … / Antwort: …"-Texte
   gespeichert.
-- PDFs (z.B. Modulhandbuch) werden seitenweise extrahiert und in Chunks von
+- PDFs aus `data/pdfs/` (z.B. Modulhandbücher) werden seitenweise extrahiert und in Chunks von
   400 Zeichen mit 50 Zeichen Überlappung zerlegt (Überlappung verhindert, dass
   Information an Chunk-Grenzen verloren geht).
 - Embedding-Modell: `paraphrase-multilingual-MiniLM-L12-v2`
@@ -282,7 +282,7 @@ $env:PYTHONIOENCODING="utf-8"; python -m pytest tests/ -v
 ```
 `run.ps1` ist idempotent und übernimmt alles in einem Befehl: `.env`-Validierung
 (GOOGLE_API_KEY), Installation von ngrok und pip-Paketen beim ersten Aufruf,
-Befüllung von `chroma_db/` über `fill_db.py` (falls nötig), Start des
+Befüllung von `chroma_db/` über `scripts/fill_db.py` (falls nötig), Start des
 ngrok-Tunnels (gibt die öffentliche URL aus) und uvicorn auf Port 8000 mit
 `--reload` (Modulpfad `app.main:app`). Folgeaufrufe überspringen erledigte
 Schritte (pip via `.pip-stamp`, ngrok via Tunnel-Probe auf Port 4040).
