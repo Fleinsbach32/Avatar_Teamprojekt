@@ -213,8 +213,8 @@ def test_chat_uses_kira_persona(mock_client, mock_collection):
 
 @patch("app.rag.collection")
 @patch("app.routes.chat.client")
-def test_chat_context_limit_400(mock_client, mock_collection):
-    long_doc = "B" * 500
+def test_chat_context_limit_600(mock_client, mock_collection):
+    long_doc = "B" * 700
     mock_collection.query.return_value = {"documents": [[long_doc]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
         return_value=make_async_stream(["Antwort."])
@@ -223,5 +223,5 @@ def test_chat_context_limit_400(mock_client, mock_collection):
     test_client.post("/chat", json={"message": "Test", "session_id": "test_limit"})
 
     prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
-    assert "B" * 400 in prompt
-    assert "B" * 401 not in prompt
+    assert "B" * 600 in prompt
+    assert "B" * 601 not in prompt

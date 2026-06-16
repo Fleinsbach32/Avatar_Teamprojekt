@@ -261,8 +261,8 @@ def test_tavus_llm_uses_kira_persona(mock_client, mock_collection):
 
 @patch("app.rag.collection")
 @patch("app.routes.tavus.client")
-def test_tavus_llm_context_limit_400(mock_client, mock_collection):
-    long_doc = "A" * 500
+def test_tavus_llm_context_limit_600(mock_client, mock_collection):
+    long_doc = "A" * 700
     mock_collection.query.return_value = {"documents": [[long_doc]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
         return_value=make_async_stream(["Antwort."])
@@ -272,8 +272,8 @@ def test_tavus_llm_context_limit_400(mock_client, mock_collection):
         "stream": True
     })
     prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
-    assert "A" * 400 in prompt
-    assert "A" * 401 not in prompt
+    assert "A" * 600 in prompt
+    assert "A" * 601 not in prompt
 
 
 # ── Voice-Prefs: /tavus/settings + Wirkung auf /tavus/llm ──

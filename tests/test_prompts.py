@@ -94,16 +94,16 @@ def test_build_rag_context_general_fallback():
     assert distanz == 0.9
     assert "allgemeines Hochschulwissen" in anweisung
 
-def test_build_rag_context_truncates_docs_at_400():
+def test_build_rag_context_truncates_docs_at_600():
     with patch("app.rag.collection") as mock_collection:
         mock_collection.query.return_value = {
-            "documents": [["C" * 500]],
+            "documents": [["C" * 700]],
             "distances": [[0.2]]
         }
         from app.rag import build_rag_context
         kontext, _, _ = build_rag_context("Testfrage")
-    assert "C" * 400 in kontext
-    assert "C" * 401 not in kontext
+    assert "C" * 600 in kontext
+    assert "C" * 601 not in kontext
 
 def test_build_rag_context_studiengang_filter():
     with patch("app.rag.collection") as mock_collection:
