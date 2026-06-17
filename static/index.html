@@ -510,6 +510,66 @@ body {
   #chatPanel { width: 100vw; }
   .avatar-container { max-width: calc(100vw - 32px); }
 }
+
+/* ── Chat: transparente Dunkel-Variante ────────────── */
+#chatPanel {
+  background: rgba(10,10,10,0.72);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: none;
+  border-left: 1px solid rgba(255,255,255,0.07);
+}
+.chat-header {
+  background: transparent;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.chat-title { color: #fff; }
+.chat-close-btn { color: rgba(255,255,255,0.55); }
+.chat-close-btn:hover { background: rgba(255,255,255,0.09); color: #fff; }
+#messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); }
+.empty-state, .empty-state p { color: rgba(255,255,255,0.65); }
+.empty-icon { opacity: 0.55; }
+.chip {
+  background: rgba(0,150,130,0.18);
+  color: var(--kit-green);
+  border: 1px solid rgba(0,150,130,0.3);
+}
+.chip:hover { background: rgba(0,150,130,0.32); transform: translateY(-1px); }
+.msg.bot .bubble {
+  background: rgba(255,255,255,0.09);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #f0f0f0;
+}
+.msg.bot .msg-icon { background: rgba(0,150,130,0.3); border: 1px solid rgba(0,150,130,0.2); }
+.msg.user .msg-icon { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.6); }
+.role-label { opacity: 0.4; }
+.meta { color: rgba(255,255,255,0.45); }
+.meta .wb { color: var(--kit-green); }
+.meta .llm { color: #f59e0b; }
+.typing-dots span { background: rgba(255,255,255,0.55); }
+.error-bubble { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.3); color: #fca5a5; }
+.input-area { background: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.08); }
+#userInput {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #fff;
+}
+#userInput::placeholder { color: rgba(255,255,255,0.38); }
+#userInput:focus { border-color: var(--kit-green); }
+.hint { color: rgba(255,255,255,0.38); }
+.tts-btn { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6); }
+.tts-btn.active { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.5); }
+
+/* ── Toolbar: zentrierte Pille statt volle Breite ──── */
+.avatar-toolbar {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: auto;
+  border-radius: 16px 16px 0 0;
+  border-top: none;
+  box-shadow: 0 -2px 20px rgba(0,0,0,0.5);
+}
   </style>
 </head>
 <body>
@@ -641,8 +701,6 @@ body {
   const chatPanel      = document.getElementById("chatPanel");
   const chatCloseBtn   = document.getElementById("chatCloseBtn");
   const chipsRow       = document.getElementById("chipsRow");
-
-  const avatarZone = document.querySelector(".avatar-zone");
 
   // ── i18n (DE/EN) ──────────────────────────────────────
   const I18N = {
@@ -784,12 +842,10 @@ body {
     chatPanel.classList.add("open");
     const chatTb = document.getElementById("toolbarChatBtn");
     if (chatTb) chatTb.classList.remove("unread");
-    avatarZone.style.right = "380px";
   }
 
   function closeChat() {
     chatPanel.classList.remove("open");
-    avatarZone.style.right = "0";
   }
 
   chatCloseBtn.addEventListener("click", closeChat);
