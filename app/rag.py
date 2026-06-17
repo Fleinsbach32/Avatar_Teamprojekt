@@ -123,7 +123,7 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
             return kontext, anweisung, distanz
 
     # Standardsuche (semantisch)
-    results = _query_safe(where, 3, query_texts=[query])
+    results = _query_safe(where, 6, query_texts=[query])
     beste_distanz = results["distances"][0][0] if results["distances"][0] else 1.0
     kontext = "\n\n".join(doc[:600] for doc in results["documents"][0])
 
