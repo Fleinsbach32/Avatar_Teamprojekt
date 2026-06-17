@@ -178,8 +178,9 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
                 "Nenne den vollständigen Modulnamen wie er im Kontext steht. "
                 "Nenne keine anderen Modulnamen, die nicht explizit im Kontext erwähnt werden."
             )
-            distanz = what_results["distances"][0][0] if what_results["distances"][0] else 0.2
-            return kontext, anweisung, distanz
+            # Fester Distanzwert — Treffer via $contains ist immer aus der DB,
+            # unabhängig von der semantischen Embedding-Distanz.
+            return kontext, anweisung, 0.1
         # Modul nicht gefunden → klare Aussage, kein Raten
         return (
             "",

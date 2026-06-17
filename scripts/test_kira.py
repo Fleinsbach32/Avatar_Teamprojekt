@@ -61,6 +61,55 @@ TESTS = [
     ("Ich komme aus Indien, kann ich mich auf einen Master bewerben?", "de", None, "Edge: Internationale Bewerbung"),
     ("Kannst du mir bei Mathe helfen?",                    "de", None,         "Edge: Off-Topic"),
     ("Wer bist du?",                                       "de", None,         "Edge: Identitätsfrage"),
+
+    # ── Neu: Mehrschrittiges Reasoning & Administrative Abläufe ─────────────
+    # Prüft ob KIRA konkrete Abläufe / Konsequenzen korrekt erklären kann
+    ("Ich habe die Orientierungsprüfung nicht bestanden. Was passiert jetzt?",
+                                                           "de", "wing_bsc",   "Reasoning: Orientierungsprüfung durchgefallen"),
+    ("Wie oft darf ich eine Klausur wiederholen, wenn ich durchgefallen bin?",
+                                                           "de", None,         "Reasoning: Prüfungswiederholungen"),
+    ("Kann ich mein Berufspraktikum auch im Ausland machen?",
+                                                           "de", "wing_bsc",   "Reasoning: Praktikum Ausland"),
+    ("Ich bin im 5. Semester WING und möchte zu WINFO wechseln. Wie läuft das ab?",
+                                                           "de", None,         "Reasoning: Studiengangwechsel"),
+
+    # ── Neu: Bekannte Module aus der DB (testen RAG-Trefferqualität) ────────
+    ("Was ist das Modul Controlling?",                     "de", "wing_bsc",   "Modul-DB: Controlling (wing_bsc)"),
+    ("Was ist die Modulnummer von Strategie und Organisation?",
+                                                           "de", "wing_bsc",   "Modul-DB: Name→Nummer Strategie und Organisation"),
+    ("Was ist das Modul Essentials of Finance?",           "de", "wing_bsc",   "Modul-DB: Essentials of Finance (wing_bsc)"),
+    ("Wie viele ECTS hat das Modul Mathematik 1?",         "de", "wing_bsc",   "Modul-DB: ECTS Mathematik 1"),
+
+    # ── Neu: Vergleich & Studienberatung ────────────────────────────────────
+    # Prüft ob KIRA sinnvoll zwischen Studiengängen differenzieren kann
+    ("Was ist der Unterschied zwischen WING Bachelor und WINFO Bachelor?",
+                                                           "de", None,         "Vergleich: WING vs WINFO BSc"),
+    ("Ich interessiere mich für Wirtschaft und Informatik — welcher Studiengang passt: WINFO oder Digital Economics?",
+                                                           "de", None,         "Vergleich: WINFO vs DigiEco"),
+
+    # ── Neu: Persönlichkeit & Empathie ──────────────────────────────────────
+    # Prüft Ton, Empathie und natürliche Gesprächsführung
+    ("Die Klausurenphase macht mich wahnsinnig, ich steh total unter Druck und weiß nicht mehr weiter.",
+                                                           "de", None,         "Empathie: Klausurenstress"),
+    ("Hey, wie geht's dir?",                               "de", None,         "Smalltalk: Greeting"),
+    ("Ich weiß nicht ob das Studium das Richtige für mich ist, ich überlege alles hinzuschmeißen.",
+                                                           "de", None,         "Empathie: Studiumszweifel"),
+
+    # ── Neu: Falsche Voraussetzungen (Fact-Checking) ────────────────────────
+    # KIRA soll falsche Annahmen sanft korrigieren statt zu bestätigen
+    ("Stimmt es, dass der WING Bachelor 240 ECTS hat?",    "de", "wing_bsc",   "Fact-Check: ECTS falsch (240 statt 180)"),
+    ("Ich habe gehört man kann Prüfungen am KIT beliebig oft wiederholen — stimmt das?",
+                                                           "de", None,         "Fact-Check: Prüfungswiederholung unbegrenzt?"),
+
+    # ── Neu: Campus-Leben & Borderline ──────────────────────────────────────
+    ("Gibt es eine Mensa am KIT — wo kann ich mittags essen?",
+                                                           "de", None,         "Campus: Mensa"),
+    ("Kannst du mir einen Lebenslauf schreiben?",          "de", None,         "Off-Topic: Lebenslauf"),
+
+    # ── Neu: Englisch – Modul & Notfall ─────────────────────────────────────
+    ("What is the module Controlling about?",              "en", "wing_bsc",   "EN: Modul Controlling"),
+    ("I just failed my exam and I'm devastated. What are my options?",
+                                                           "en", None,         "EN: Empathy + Prüfungswiederholung"),
 ]
 
 # ---------------------------------------------------------------------------
