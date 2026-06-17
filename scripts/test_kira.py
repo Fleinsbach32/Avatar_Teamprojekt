@@ -16,6 +16,11 @@ import json
 import os
 import sys
 
+# Windows-Konsole auf UTF-8 umstellen (verhindert charmap-Fehler bei Sonderzeichen)
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 try:
     import httpx
 except ImportError:
@@ -38,13 +43,14 @@ TESTS = [
     ("Welche Module gibt es im WINFO Master?",             "de", "winfo_msc",  "WINFO MSc Module (mit Filter)"),
     ("Wie viele ECTS hat der Digital Economics Bachelor?", "de", "digieco_bsc","DigiEco BSc ECTS (mit Filter)"),
 
-    # Modul-spezifisch
-    ("Was ist das Modul Buchführung und Abschluss?",       "de", "wing_bsc",   "Modul: Buchführung (mit Filter)"),
+    # Modul-spezifisch (Module die tatsächlich im WING BSc Handbuch stehen)
+    ("Was ist das Modul Finanzierung und Rechnungswesen?", "de", "wing_bsc",   "Modul: Finanzierung und Rechnungswesen"),
     ("Erkläre mir Lean Management kurz.",                  "de", "wing_bsc",   "Modul: Lean Management"),
 
     # Modul-ID & Name→Nummer
-    ("M-WIWI-101430",                                      "de", "wing_bsc",   "Modul-ID direkt"),
-    ("Was ist die Modulnummer von Buchführung und Abschluss?", "de", "wing_bsc", "Name → Nummer"),
+    # M-WIWI-101430 = Angewandte Informatik in winfo_bsc (nicht wing_bsc!)
+    ("M-WIWI-101430",                                      "de", "winfo_bsc",  "Modul-ID: Angewandte Informatik (winfo_bsc)"),
+    ("Was ist die Modulnummer von Berufspraktikum?",       "de", "wing_bsc",   "Name → Nummer: Berufspraktikum"),
 
     # Englisch
     ("What compulsory modules does the WING Bachelor have?", "en", "wing_bsc", "EN: WING BSc Pflichtmodule"),

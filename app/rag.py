@@ -52,6 +52,15 @@ _NUMBER_Q_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Erkennt "Was ist das Modul X?" / "Erkläre das Modul X" / "Was macht Modul X?"
+_WHAT_IS_MODULE_RE = re.compile(
+    r'(?:was\s+(?:ist|sind|bedeutet|beinhaltet|umfasst)|erkl(?:ä|ae)re?\s+(?:mir\s+)?(?:kurz\s+)?|'
+    r'beschreibe?\s+(?:mir\s+)?(?:kurz\s+)?|was\s+macht)\s+'
+    r'(?:(?:das|ein|die|dem|den)\s+)?(?:modul\s+)'
+    r'(.+?)[\?\.!]*\s*$',
+    re.IGNORECASE,
+)
+
 
 def _module_name_from_number_question(query: str) -> str | None:
     """Erkennt Fragen wie 'Wie lautet die Modulnummer von <Name>?' und gibt
@@ -62,6 +71,26 @@ def _module_name_from_number_question(query: str) -> str | None:
         name = m.group(1).strip().strip('"\'')
         return name or None
     return None
+
+
+def _module_name_from_what_is_question(query: str) -> str | None:
+    """Erkennt 'Was ist das Modul X?' und gibt den Modulnamen X zurück."""
+    m = _WHAT_IS_MODULE_RE.search(query)
+    if m:
+        name = m.group(1).strip().strip('"\'')
+        return name if len(name) >= 3 else None
+    return None
+
+
+def _contains_variants(name: str) -> list[str]:
+    """Erzeugt Schreibvarianten für where_document $contains (Case-Varianten
+    + erster Bestandteil als Fallback bei mehrteiligen Namen)."""
+    variants = [name, name.title(), name.capitalize()]
+    words = name.split()
+    if len(words) > 1 and len(words[0]) >= 4:
+        variants.append(words[0])
+        variants.append(words[0].title())
+    return list(dict.fromkeys(v for v in variants if v))
 
 
 def _query_safe(where: dict | None, n_results: int, **kwargs) -> dict:
@@ -102,11 +131,11 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
 
     # "Modulnummer von <Name>?" → Volltext-Treffer auf den Modulnamen.
     # Semantische Suche rankt kurze Namen unzuverlässig, daher where_document
-    # $contains (mit Groß-/Kleinschreibungs-Varianten gegen Case-Sensitivität).
+    # $contains (mit Groß-/Kleinschreibungs-Varianten + erstem Wort als Fallback).
     name_query = _module_name_from_number_question(query)
     if name_query:
         name_results = {"documents": [[]], "distances": [[]]}
-        for variant in dict.fromkeys([name_query, name_query.title(), name_query.capitalize()]):
+        for variant in _contains_variants(name_query):
             name_results = _query_safe(where, 3, query_texts=[name_query],
                                        where_document={"$contains": variant})
             if name_results["documents"][0]:
@@ -115,28 +144,70 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
             kontext = "\n\n".join(doc[:600] for doc in name_results["documents"][0])
             anweisung = (
                 "Der folgende Kontext aus der KIT-Wissensdatenbank enthält Module mit ihren "
-                "Modulnummern (z. B. M-WIWI-101430). Beantworte die Frage auf Basis dieses Kontexts "
+                "Modulnummern. Beantworte die Frage auf Basis dieses Kontexts "
                 "und nenne die Modulnummer des gefragten Moduls, da ausdrücklich danach gefragt wurde. "
-                "Wähle das Modul, dessen Name am besten zur Frage passt."
+                "Wähle das Modul, dessen Name am besten zur Frage passt. "
+                "Wenn das gesuchte Modul nicht im Kontext vorkommt, sage ehrlich, dass du die "
+                "Modulnummer nicht in der Datenbank hast, und empfehle campus.kit.edu."
             )
             distanz = name_results["distances"][0][0] if name_results["distances"][0] else 0.2
             return kontext, anweisung, distanz
+        # Modul nicht in DB → kein Kontext, direkte Anweisung
+        return (
+            "",
+            "Das angefragte Modul ist nicht in der Wissensdatenbank. "
+            "Sage das ehrlich in einem Satz und empfehle campus.kit.edu für die Modulnummer.",
+            1.0,
+        )
+
+    # "Was ist das Modul X?" → gezielter Volltext-Treffer auf Modulname,
+    # verhindert Halluzination von Alternativmodulen bei fehlendem Treffer.
+    what_is_name = _module_name_from_what_is_question(query)
+    if what_is_name:
+        what_results = {"documents": [[]], "distances": [[]]}
+        for variant in _contains_variants(what_is_name):
+            what_results = _query_safe(where, 3, query_texts=[what_is_name],
+                                       where_document={"$contains": variant})
+            if what_results["documents"][0]:
+                break
+        if what_results["documents"][0]:
+            kontext = "\n\n".join(doc[:600] for doc in what_results["documents"][0])
+            anweisung = (
+                "Der folgende Kontext enthält Informationen zum angefragten Modul aus der "
+                "KIT-Wissensdatenbank. Beantworte die Frage ausschließlich auf Basis dieses Kontexts. "
+                "Nenne den vollständigen Modulnamen wie er im Kontext steht. "
+                "Nenne keine anderen Modulnamen, die nicht explizit im Kontext erwähnt werden."
+            )
+            distanz = what_results["distances"][0][0] if what_results["distances"][0] else 0.2
+            return kontext, anweisung, distanz
+        # Modul nicht gefunden → klare Aussage, kein Raten
+        return (
+            "",
+            "Das angefragte Modul ist nicht in der Wissensdatenbank. "
+            "Sage kurz und ehrlich, dass du dazu keine Informationen hast. "
+            "Schlage KEINE anderen Modulnamen vor. Empfehle campus.kit.edu.",
+            1.0,
+        )
 
     # Standardsuche — zweistufig wenn Studiengang gewählt, sonst einstufig.
     # Problem: "all"-getaggte Web-Chunks (54k) überdecken bei einstufiger Suche
     # die Modulhandbuch-Chunks des gewählten Studiengangs (je ~1.5k Chunks).
+    # Bei Pflichtmodul-Fragen werden mehr Studiengang-Chunks abgerufen.
+    is_pflicht = any(kw in query.lower() for kw in ("pflichtmodul", "pflicht", "orientierungsprüfung", "orientierungspruefung"))
     if studiengang and studiengang in STUDIENGANG_FILES:
+        prog_n = 8 if is_pflicht else 4
         # Stufe 1: Handbuch des gewählten Studiengangs (Priorität)
-        prog_r = _query_safe({"program": studiengang}, 4, query_texts=[query])
+        prog_r = _query_safe({"program": studiengang}, prog_n, query_texts=[query])
         prog_docs  = prog_r["documents"][0]
         prog_dists = prog_r["distances"][0]
         # Stufe 2: allgemeiner Inhalt (FAQ, Info, Web)
         all_r  = _query_safe({"program": "all"}, 3, query_texts=[query])
         all_docs  = all_r["documents"][0]
         all_dists = all_r["distances"][0]
-        # Handbuch-Chunks zuerst, dann allgemeine (max. 6)
-        docs  = (prog_docs + all_docs)[:6]
-        dists = (prog_dists + all_dists)[:6]
+        # Handbuch-Chunks zuerst, dann allgemeine (max. 8 bei Pflicht, sonst 6)
+        limit = prog_n + 2
+        docs  = (prog_docs + all_docs)[:limit]
+        dists = (prog_dists + all_dists)[:limit]
         beste_distanz = min(dists) if dists else 1.0
     else:
         results = _query_safe(where, 6, query_texts=[query])
@@ -152,6 +223,8 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
             "Nutze ihn, wenn er zur Frage passt. "
             "Wenn der Kontext die Frage nicht beantwortet oder ein anderes Thema behandelt, "
             "ignoriere ihn und antworte auf Basis deines allgemeinen Hochschulwissens. "
+            "Wenn nach einem bestimmten Modul gefragt wird, nenne es nur wenn es explizit "
+            "im Kontext steht — schlage niemals andere Modulnamen als Alternative vor. "
             "Erfinde niemals Inhalte aus einem unpassenden Kontext."
         )
     else:
