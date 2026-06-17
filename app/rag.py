@@ -122,10 +122,29 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
             distanz = name_results["distances"][0][0] if name_results["distances"][0] else 0.2
             return kontext, anweisung, distanz
 
-    # Standardsuche (semantisch)
-    results = _query_safe(where, 6, query_texts=[query])
-    beste_distanz = results["distances"][0][0] if results["distances"][0] else 1.0
-    kontext = "\n\n".join(doc[:600] for doc in results["documents"][0])
+    # Standardsuche — zweistufig wenn Studiengang gewählt, sonst einstufig.
+    # Problem: "all"-getaggte Web-Chunks (54k) überdecken bei einstufiger Suche
+    # die Modulhandbuch-Chunks des gewählten Studiengangs (je ~1.5k Chunks).
+    if studiengang and studiengang in STUDIENGANG_FILES:
+        # Stufe 1: Handbuch des gewählten Studiengangs (Priorität)
+        prog_r = _query_safe({"program": studiengang}, 4, query_texts=[query])
+        prog_docs  = prog_r["documents"][0]
+        prog_dists = prog_r["distances"][0]
+        # Stufe 2: allgemeiner Inhalt (FAQ, Info, Web)
+        all_r  = _query_safe({"program": "all"}, 3, query_texts=[query])
+        all_docs  = all_r["documents"][0]
+        all_dists = all_r["distances"][0]
+        # Handbuch-Chunks zuerst, dann allgemeine (max. 6)
+        docs  = (prog_docs + all_docs)[:6]
+        dists = (prog_dists + all_dists)[:6]
+        beste_distanz = min(dists) if dists else 1.0
+    else:
+        results = _query_safe(where, 6, query_texts=[query])
+        docs  = results["documents"][0]
+        dists = results["distances"][0]
+        beste_distanz = dists[0] if dists else 1.0
+
+    kontext = "\n\n".join(doc[:600] for doc in docs)
 
     if beste_distanz < 0.45:
         anweisung = (
