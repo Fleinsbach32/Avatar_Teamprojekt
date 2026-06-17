@@ -199,7 +199,7 @@ body {
   position: fixed;
   top: 48px; right: 0;
   width: 380px;
-  height: calc(100vh - 48px - 72px);
+  height: calc(100vh - 48px);
   background: var(--surface);
   box-shadow: -4px 0 24px rgba(0,0,0,0.10);
   display: flex;
@@ -492,6 +492,8 @@ body {
 .tb-btn.active .tb-icon svg { color:#ef4444; }
 .tb-btn.active .tb-label { color:#ef4444; }
 .tb-btn.end:hover:not(:disabled) { background:rgba(239,68,68,0.25); }
+.tb-btn.end .tb-icon svg { color:#ef4444; }
+.tb-btn.end .tb-label { color:#ef4444; }
 .tb-icon { display:flex; align-items:center; justify-content:center; position:relative; }
 .tb-label { font-size:11px; color:rgba(255,255,255,0.75); white-space:nowrap; line-height:1; }
 .tb-btn.active .tb-label { color:#ef4444; }
