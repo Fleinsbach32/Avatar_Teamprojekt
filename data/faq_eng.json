@@ -1,0 +1,174 @@
+[
+  {
+    "question": "By when do I have to apply for the summer semester at KIT?",
+    "answer": "The application deadline for the summer semester is 15 January, and for the winter semester 15 July. International students have deadlines roughly 6 weeks earlier."
+  },
+  {
+    "question": "What is the Numerus Clausus (NC) at KIT?",
+    "answer": "The NC is the grade average of the last admitted applicant in the previous year and varies by degree programme and semester. In addition to the grade, waiting periods also count toward the allocation of places."
+  },
+  {
+    "question": "How do I apply for an economics (WiWi) degree programme at KIT?",
+    "answer": "Admission-restricted programmes such as WiIng and TVWL are applied for via hochschulstart.de, while open-admission programmes are applied for directly through the KIT application portal. You need your school-leaving certificate (Abitur), a photo ID and, where applicable, proof of language skills."
+  },
+  {
+    "question": "Which Bachelor's programmes does the WiWi faculty offer?",
+    "answer": "The WiWi faculty offers Industrial Engineering and Management (WiIng), Technical Economics (TVWL), Information Systems (WiInf), Business Mathematics (WiMa) and Digital Economics. All programmes comprise 6 semesters and 180 ECTS."
+  },
+  {
+    "question": "Which Master's programmes does the WiWi faculty offer?",
+    "answer": "The WiWi faculty offers WiIng, TVWL, WiInf, WiMa, Digital Economics as well as the English-taught Master Industrial Engineering and Management (IEAM). All Master's programmes comprise 4 semesters and 120 ECTS."
+  },
+  {
+    "question": "What do I need to do first as a first-semester student?",
+    "answer": "First you have to activate your KIT account in the SCC self-service portal and set up your email inbox. After that you should apply for the KIT Card with a portrait photo, activate MS Teams, set up the Eduroam Wi-Fi, create your timetable in CAS and register for the O-Phase."
+  },
+  {
+    "question": "What is the O-Phase and should I take part in it?",
+    "answer": "The O-Phase is a voluntary introduction week run by the student council (Fachschaft) before lectures begin. Taking part is highly recommended because you get to know fellow students and receive important information about your studies."
+  },
+  {
+    "question": "When do lectures start at KIT?",
+    "answer": "The winter semester begins at the end of October and the summer semester in mid-April. The exact dates vary slightly from year to year."
+  },
+  {
+    "question": "How do I create my timetable at KIT?",
+    "answer": "You log in to CAS with your u-identifier, search for the courses in the course catalogue and add them to your favourites – they then appear automatically in your timetable. You book tutorials during the first lecture week via YouSubscribe in the WiWi portal."
+  },
+  {
+    "question": "How do I register for exams at KIT?",
+    "answer": "Exam registration is done via CAS, usually 4 to 6 weeks before the exam date. Missed deadlines cannot be extended afterwards, so you should check your KIT inbox regularly, as important information comes by email."
+  },
+  {
+    "question": "I failed an exam. What can I do?",
+    "answer": "There are a total of three attempts, that is one first attempt and two retakes. If you ultimately fail, you risk being de-registered from the programme. The WiWi examination office and the student council (Fachschaft) will advise you individually."
+  },
+  {
+    "question": "How does exam review (Klausureinsicht) work at KIT?",
+    "answer": "You can review your exam within one month of the result being announced. Review appointments are announced by email. You may take notes and, where there is a legitimate interest such as objections to the grading, also make copies. For each hour of writing time you are entitled to at least 10 minutes of review time."
+  },
+  {
+    "question": "What is the mandatory internship for WiIng and TVWL?",
+    "answer": "The mandatory internship lasts at least 12 weeks and is worth 10 ECTS. It can be split into a maximum of three separate internships of at least 4 weeks each, with at least 20 hours per week over 5 days. A maximum of 3 sick days are accepted without having to be made up. Proof must be submitted by the time you are admitted to the Bachelor's thesis at the latest."
+  },
+  {
+    "question": "What do I have to submit for the mandatory internship?",
+    "answer": "You must submit an originally signed company certificate stating the duration, working hours, days absent, departments and activities, as well as an internship report countersigned by the company."
+  },
+  {
+    "question": "How much is the semester fee at KIT?",
+    "answer": "The semester fee is about 187 euros per semester and includes the KVV semester ticket, the student services (Studentenwerk) contribution and the AStA contribution."
+  },
+  {
+    "question": "When and how do I have to re-register (Rückmeldung) at KIT?",
+    "answer": "Re-registration is done by paying the semester fee within the re-registration period, which is usually 6 to 8 weeks before the start of the semester. Without re-registration you are automatically de-registered."
+  },
+  {
+    "question": "Can I take a break from my studies at KIT?",
+    "answer": "Yes, a leave of absence is possible for important reasons such as illness, a semester abroad, an internship or pregnancy. The application must be submitted to the student registration office before the start of the semester. During a leave semester no exams are possible and BAföG is generally not paid."
+  },
+  {
+    "question": "How do I apply for BAföG?",
+    "answer": "BAföG is applied for at the Studierendenwerk Karlsruhe, not at the university. The application can be submitted online via the BAföG Digital portal. You need proof of your parents' income, the enrolment certificate and your ID card. Processing takes about 4 to 8 weeks."
+  },
+  {
+    "question": "How does the semester ticket work at KIT?",
+    "answer": "The semester ticket is included in the semester fee and is valid throughout the entire KVV network in Karlsruhe and the surrounding area. It is valid together with the KIT Card."
+  },
+  {
+    "question": "How can I change my degree programme?",
+    "answer": "A change of subject is possible for the next semester by registering for the new programme and de-registering from the old one. Credits already earned can be recognised by the examination office of the new programme."
+  },
+  {
+    "question": "How does a semester abroad work for WiWi students?",
+    "answer": "You apply through the IRO (International Relations Office) of the WiWi faculty, about 9 to 12 months in advance. There are around 70 partner universities worldwide, and credits are recognised via a Learning Agreement agreed in advance."
+  },
+  {
+    "question": "What is the Learning Agreement?",
+    "answer": "The Learning Agreement is a binding document that defines, before the semester abroad, which courses you will take abroad and how they will be recognised at the WiWi faculty. It must be signed by you, the home university and the host university."
+  },
+  {
+    "question": "How do I get access to Wi-Fi and IT services at KIT?",
+    "answer": "After enrolment you receive a KIT account with a u-identifier, which must be activated in the SCC self-service portal. This gives you access to Eduroam Wi-Fi, your KIT email address, ILIAS, CAS, MS Teams, VPN and Microsoft Office 365."
+  },
+  {
+    "question": "What is ILIAS?",
+    "answer": "ILIAS is KIT's learning platform, where you find lecture materials, exercise sheets and course materials. You log in with your KIT u-identifier. Important: ILIAS messages alone are not enough, as study-relevant information also comes by email."
+  },
+  {
+    "question": "What is CAS?",
+    "answer": "CAS is KIT's campus management system. There you register and de-register for exams, see your grades and your study plan, create your timetable and book SQ (key qualification) credits."
+  },
+  {
+    "question": "What are key qualifications (SQ) and how many do I need?",
+    "answer": "Key qualifications are transferable skills such as presentation, project management or languages. Depending on the programme, WiWi students must earn 6 ECTS in the SQ area, for example via HoC, ZAK or the Language Centre. You record them yourself in CAS under the item ÜQ/SQ credit."
+  },
+  {
+    "question": "How do I apply for recognition of academic credits?",
+    "answer": "You submit an application using the relevant form to the WiWi examination office. There is a separate form for credits earned abroad; both are available on wiwi.kit.edu."
+  },
+  {
+    "question": "What is the Fachschaft WiWi and what does it do?",
+    "answer": "The Fachschaft WiWi is the student representation of WiWi students at KIT. It offers past exams, exam transcripts, study, social and legal advice as well as events such as the O-Phase and the graduation ceremony. The office hours are Mon to Fri from 11:30 to 13:30 in building 05.20, room 1C-03.2. During the lecture-free period only on Wednesdays from 11:30 to 14:00."
+  },
+  {
+    "question": "Where do I find past exams and exam transcripts?",
+    "answer": "Past exams and exam transcripts are available from the Fachschaft WiWi. You can buy them during office hours or view them online at fachschaft.org."
+  },
+  {
+    "question": "What is the 4KommaNull programme?",
+    "answer": "The 4KommaNull programme is aimed at top students of the WiWi faculty with an average of 1.3 or better and offers networking, exclusive events and company contacts."
+  },
+  {
+    "question": "How do I register my Bachelor's thesis?",
+    "answer": "You first find a supervising chair and then submit the registration form to the examination office. The processing time is 13 weeks, and a minimum number of ECTS according to your study and examination regulations is required."
+  },
+  {
+    "question": "What is Eucor?",
+    "answer": "Eucor is a university network in the Upper Rhine region consisting of KIT, the University of Freiburg, the University of Basel, the University of Strasbourg and Haute-Alsace. WiWi students can take courses at the partner universities and have them recognised."
+  },
+  {
+    "question": "May I use generative AI such as ChatGPT for seminar papers and theses?",
+    "answer": "Yes, but the use must be documented transparently, for example in a table listing the affected passages, the prompts used and the degree of your own revision. Undeclared use of AI counts as an attempt to deceive, and AI errors count as your own errors. The exact rules are set individually by each chair."
+  },
+  {
+    "question": "Where do I find the current module handbook for my degree programme?",
+    "answer": "The current module handbooks are available on wiwi.kit.edu under the respective programme. There are German and English versions as well as separate handbooks for Bachelor and Master."
+  },
+  {
+    "question": "What is a decelerated study plan (entschleunigter Studienplan)?",
+    "answer": "A decelerated study plan makes it possible to spread your studies over more semesters, for example in case of illness, disability, childcare or competitive sport. The contact point is the WiWi student advisory service."
+  },
+  {
+    "question": "What is the disadvantage compensation (Nachteilsausgleich) and how do I apply for it?",
+    "answer": "Students with a disability or chronic illness can apply for disadvantage compensation, for example an extension of time in exams. The application is submitted to the WiWi examination office together with a medical certificate."
+  },
+  {
+    "question": "Are there preparatory courses at KIT for first-semester students?",
+    "answer": "The MINT-Kolleg offers maths and computer science preparatory courses before lectures begin, in September and October. The maths preparatory course is especially recommended for WiWi students. Registration is possible from 15 July and places are limited."
+  },
+  {
+    "question": "Can I take language courses for free at KIT?",
+    "answer": "Yes, as a KIT student you can take one free language course per semester at the Language Centre. The courses fill up quickly and can be counted as key qualifications."
+  },
+  {
+    "question": "How do I get an enrolment certificate?",
+    "answer": "You can download your enrolment certificate yourself in CAS at any time. It is needed for BAföG, child benefit, health insurance and many discounts."
+  },
+  {
+    "question": "Is there psychological counselling for students at KIT?",
+    "answer": "The Studierendenwerk Karlsruhe offers free psychological counselling. The Fachschaft WiWi additionally offers social and legal advice."
+  },
+  {
+    "question": "How can I de-register (exmatriculate) from KIT?",
+    "answer": "You submit a written application to the KIT student registration office. De-registration takes effect at the end of the current semester, and you must return the KIT Card."
+  },
+  {
+    "question": "What housing options are there for students in Karlsruhe?",
+    "answer": "The Studierendenwerk arranges places in halls of residence and private rooms. Since the housing market is very tight, especially from September to November, you should start looking as early as possible."
+  },
+  {
+    "question": "What is the WiWi portal?",
+    "answer": "The WiWi portal at portal.wiwi.kit.edu is the faculty's own student portal. You log in with your u-identifier and can register there for tutorials and exercise groups via YouSubscribe."
+  }
+]
