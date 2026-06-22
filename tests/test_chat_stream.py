@@ -257,5 +257,9 @@ def test_chat_rag_exception_returns_sse_error(mock_rag):
     # Muss 200 OK mit SSE-Body sein, nicht HTTP 500
     assert response.status_code == 200
     assert "text/event-stream" in response.headers.get("content-type", "")
+    assert response.headers.get("cache-control") == "no-cache"
     events = sse_events(response.text)
-    assert any(e.get("type") == "error" for e in events)
+    assert any(
+        e.get("type") == "error" and "nicht verfügbar" in e.get("message", "")
+        for e in events
+    )

@@ -36,7 +36,7 @@ async def chat(request: ChatRequest):
             build_rag_context, request.message, request.studiengang
         )
     except Exception as e:
-        logging.error(f"/chat RAG Fehler: {e}")
+        logging.error("/chat RAG Fehler", exc_info=True)
 
         async def rag_error_stream():
             yield f'data: {json.dumps({"type": "error", "message": "Wissensdatenbank momentan nicht verfügbar."})}\n\n'
