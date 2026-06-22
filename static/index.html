@@ -515,52 +515,57 @@ body {
 
 /* ── Chat: transparente Dunkel-Variante ────────────── */
 #chatPanel {
-  background: rgba(10,10,10,0.72);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   box-shadow: none;
-  border-left: 1px solid rgba(255,255,255,0.07);
+  border-left: 1px solid rgba(255,255,255,0.08);
 }
 .chat-header {
   background: transparent;
   border-bottom: 1px solid rgba(255,255,255,0.08);
 }
-.chat-title { color: #fff; }
-.chat-close-btn { color: rgba(255,255,255,0.55); }
-.chat-close-btn:hover { background: rgba(255,255,255,0.09); color: #fff; }
-#messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); }
-.empty-state, .empty-state p { color: rgba(255,255,255,0.65); }
-.empty-icon { opacity: 0.55; }
+.chat-title { color: #fff; font-weight: 700; text-shadow: 0 1px 6px rgba(0,0,0,0.8); }
+.chat-close-btn { color: rgba(255,255,255,0.70); }
+.chat-close-btn:hover { background: rgba(255,255,255,0.10); color: #fff; }
+#messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.20); }
+.empty-state, .empty-state p { color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,0.8); }
+.empty-icon { opacity: 0.80; }
 .chip {
-  background: rgba(0,150,130,0.18);
-  color: var(--kit-green);
-  border: 1px solid rgba(0,150,130,0.3);
+  background: rgba(0,0,0,0.50);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.15);
 }
-.chip:hover { background: rgba(0,150,130,0.32); transform: translateY(-1px); }
+.chip:hover { background: rgba(0,0,0,0.70); transform: translateY(-1px); }
 .msg.bot .bubble {
-  background: rgba(255,255,255,0.09);
-  border: 1px solid rgba(255,255,255,0.1);
-  color: #f0f0f0;
-}
-.msg.bot .msg-icon { background: rgba(0,150,130,0.3); border: 1px solid rgba(0,150,130,0.2); }
-.msg.user .msg-icon { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.6); }
-.role-label { opacity: 0.4; }
-.meta { color: rgba(255,255,255,0.45); }
-.meta .wb { color: var(--kit-green); }
-.meta .llm { color: #f59e0b; }
-.typing-dots span { background: rgba(255,255,255,0.55); }
-.error-bubble { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.3); color: #fca5a5; }
-.input-area { background: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.08); }
-#userInput {
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.08);
   color: #fff;
 }
-#userInput::placeholder { color: rgba(255,255,255,0.38); }
+.msg.user .bubble {
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #fff;
+}
+.msg.bot .msg-icon { background: rgba(0,0,0,0.50); border: 1px solid rgba(255,255,255,0.10); }
+.msg.user .msg-icon { background: rgba(0,0,0,0.50); border: 1px solid rgba(255,255,255,0.10); color: rgba(255,255,255,0.80); }
+.role-label { color: rgba(255,255,255,0.50); opacity: 1; }
+.meta { color: rgba(255,255,255,0.50); }
+.meta .wb { color: #4ecca3; }
+.meta .llm { color: #f59e0b; }
+.typing-dots span { background: rgba(255,255,255,0.60); }
+.error-bubble { background: rgba(0,0,0,0.55); border-color: rgba(239,68,68,0.50); color: #fca5a5; }
+.input-area { background: transparent; border-top: 1px solid rgba(255,255,255,0.08); }
+#userInput {
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff;
+}
+#userInput::placeholder { color: rgba(255,255,255,0.40); }
 #userInput:focus { border-color: var(--kit-green); }
-.hint { color: rgba(255,255,255,0.38); }
-.tts-btn { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6); }
-.tts-btn.active { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.5); }
+.hint { color: rgba(255,255,255,0.40); }
+.tts-btn { border-color: rgba(255,255,255,0.15); background: rgba(0,0,0,0.40); color: rgba(255,255,255,0.70); }
+.tts-btn.active { background: rgba(239,68,68,0.30); border-color: rgba(239,68,68,0.60); }
 
 /* ── Toolbar: zentrierte transparente Pille ─────────── */
 .avatar-toolbar {
@@ -570,10 +575,10 @@ body {
   width: auto;
   border-radius: 16px 16px 0 0;
   border-top: none;
-  background: rgba(10,10,10,0.62);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 -2px 20px rgba(0,0,0,0.35);
+  background: rgba(10,10,10,0.50);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 -2px 20px rgba(0,0,0,0.25);
 }
   </style>
 </head>

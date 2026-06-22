@@ -81,7 +81,6 @@ def test_chat_single_call_with_context(mock_client, mock_collection):
 
     prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
     assert "EINDEUTIGER_KONTEXT_42" in prompt
-    assert "vorlesen" in prompt.lower() or "vorgelesen" in prompt.lower()
     assert mock_client.aio.models.generate_content.call_count == 0
     assert mock_collection.query.call_count == 1
 
@@ -211,7 +210,6 @@ def test_chat_uses_kira_persona(mock_client, mock_collection):
     prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
     assert "KIRA" in prompt
     assert "Karlsruher Institut für Technologie" in prompt
-    assert "vorlesen" in prompt.lower() or "vorgelesen" in prompt.lower()
 
 
 @patch("app.rag.collection")

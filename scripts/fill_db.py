@@ -11,7 +11,8 @@ from chromadb.utils import embedding_functions
 # damit das Skript unabhängig vom Arbeitsverzeichnis läuft.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-CHROMA_PATH = str(PROJECT_ROOT / "chroma_db")
+CHROMA_PATH = str(PROJECT_ROOT / "data" / "chroma_db")
+CRAWLED_DATA_FOLDER = PROJECT_ROOT / "crawled_data"
 FAQ_FILES = [
     (PROJECT_ROOT / "data" / "faq_de.json",  "de"),
     (PROJECT_ROOT / "data" / "faq_eng.json", "en"),
@@ -162,6 +163,56 @@ def load_pdfs(documents, ids, metadatas, counter):
     return counter, chunk_count
 
 
+def load_crawled_data(documents, ids, metadatas, counter):
+    """Lädt gecrawlte Webseiten aus crawled_data/. Gibt (counter, page_count) zurück."""
+    if not CRAWLED_DATA_FOLDER.exists():
+        print("[WEB] crawled_data/ Ordner nicht gefunden - übersprungen")
+        return counter, 0
+
+    files = sorted(f for f in os.listdir(CRAWLED_DATA_FOLDER)
+                   if f.endswith(".json") and f != "module_ratings.json")
+    page_count = 0
+    chunk_count = 0
+
+    for fn in files:
+        try:
+            with open(CRAWLED_DATA_FOLDER / fn, encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            continue
+
+        text = data.get("extracted_text", "").strip()
+        if len(text) < 100:
+            continue
+
+        url = data.get("url", fn)
+        title = data.get("page_title", "")
+        lang = data.get("metadata", {}).get("language", "de")
+        header = f"{title}\n{url}\n\n" if title else f"{url}\n\n"
+
+        added = 0
+        for chunk in chunk_text(text, chunk_size=600, overlap=80):
+            if len(chunk.strip()) < 80:
+                continue
+            documents.append(header + chunk)
+            ids.append(f"web_{counter}")
+            metadatas.append({
+                "source": url,
+                "doc_type": "webpage",
+                "program": "all",
+                "language": lang,
+            })
+            counter += 1
+            added += 1
+            chunk_count += 1
+
+        if added > 0:
+            page_count += 1
+
+    print(f"[WEB] {page_count} Seiten -> {chunk_count} Chunks")
+    return counter, chunk_count
+
+
 def main():
     embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
         model_name="paraphrase-multilingual-MiniLM-L12-v2"
@@ -180,11 +231,17 @@ def main():
 
     documents, ids, metadatas, counter = [], [], [], 0
     counter, faq_total = load_faqs(documents, ids, metadatas, counter)
-    counter, chunk_count = load_pdfs(documents, ids, metadatas, counter)
+    counter, pdf_chunks = load_pdfs(documents, ids, metadatas, counter)
+    counter, web_chunks = load_crawled_data(documents, ids, metadatas, counter)
 
-    BATCH_SIZE = 5000
+    BATCH_SIZE = 2000
     for i in range(0, len(documents), BATCH_SIZE):
-        collection.upsert(
+        # Collection vor jedem Batch neu abrufen (verhindert stale reference bei langen Läufen)
+        col = chroma_client.get_or_create_collection(
+            name="uni_beratung",
+            embedding_function=embedding_fn,
+        )
+        col.upsert(
             documents=documents[i:i + BATCH_SIZE],
             ids=ids[i:i + BATCH_SIZE],
             metadatas=metadatas[i:i + BATCH_SIZE],
@@ -192,7 +249,7 @@ def main():
         print(f"   Batch {i // BATCH_SIZE + 1}: {min(i + BATCH_SIZE, len(documents))}/{len(documents)} gespeichert")
 
     print(f"\n[FERTIG] Gesamt in ChromaDB: {len(documents)} Eintraege")
-    print(f"   -> {faq_total} FAQ + {chunk_count} PDF-Chunks")
+    print(f"   -> {faq_total} FAQ + {pdf_chunks} PDF-Chunks + {web_chunks} Web-Chunks")
 
 
 if __name__ == "__main__":
