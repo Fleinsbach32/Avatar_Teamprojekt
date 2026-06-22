@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KIRA — KIT Studienberatung</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Anam SDK – ES-Module via importmap (funktioniert in allen modernen Browsern) -->
+  <script type="importmap">
+    { "imports": { "@anam-ai/js-sdk": "https://esm.sh/@anam-ai/js-sdk@latest" } }
+  </script>
+
+  <style>
+/* ════════════════════════════════════════════════════════
+   DESIGN TOKENS
+════════════════════════════════════════════════════════ */
+:root {
+  --kit-green:       #009682;
+  --kit-green-dark:  #007a6a;
+  --kit-green-soft:  #e6f4f2;
+  --bg:              #f0f2f5;
+  --surface:         #ffffff;
+  --text:            #1a1a2e;
+  --text-muted:      #6b7280;
+  --border:          #e5e7eb;
+  --shadow-sm:       0 2px 8px rgba(0,0,0,0.06);
+  --shadow-md:       0 4px 24px rgba(0,0,0,0.10);
+  --radius:          12px;
+  --font:            'DM Sans', -apple-system, sans-serif;
+  --mono:            'DM Mono', monospace;
+  --header-h:        52px;
+}
+
+/* ════════════════════════════════════════════════════════
+   RESET
+════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+
+/* ════════════════════════════════════════════════════════
+   KIT HEADER
+════════════════════════════════════════════════════════ */
+#kitHeader {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--header-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+  z-index: 100;
+}
+
+.header-left  { display: flex; align-items: center; gap: 10px; }
+.header-right { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+
+.kit-fan-mark { display: block; flex-shrink: 0; }
+.kit-wordmark { font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: 0.08em; }
+.header-divider { color: var(--border); font-size: 16px; }
+.header-title   { font-size: 14px; color: var(--text); font-weight: 400; }
+
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--kit-green); flex-shrink: 0;
+  transition: background 0.3s;
+}
+.status-dot.offline    { background: #9ca3af; }
+.status-dot.connecting { background: #f59e0b; animation: pulse 1.2s infinite; }
+.status-dot.speaking   { background: var(--kit-green); animation: pulse 1s infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+  50% { opacity: 0.6; }
+}
+
+/* ── Active Language Badge in Header ───────────────── */
+#activeLangBadge {
+  display: none;
+  background: var(--kit-green-soft);
+  color: var(--kit-green);
+  font-size: 11px; font-weight: 600;
+  padding: 3px 8px; border-radius: 20px;
+  letter-spacing: 0.04em;
+}
+
+/* ════════════════════════════════════════════════════════
+   AVATAR ZONE (Fullscreen hinter Header)
+════════════════════════════════════════════════════════ */
+.avatar-zone {
+  position: fixed;
+  top: var(--header-h); left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+  transition: right 0.3s ease;
+  padding: 24px;
+}
+
+.avatar-container {
+  aspect-ratio: 16/9;
+  width: 100%; max-height: 100%;
+  background: linear-gradient(145deg, #003865 0%, #005580 40%, var(--kit-green-dark) 100%);
+  border-radius: 16px; overflow: hidden;
+  position: relative;
+  box-shadow: var(--shadow-md), 0 0 0 1px rgba(0,150,130,0.2);
+}
+
+/* ── Avatar Placeholder ─────────────────────────────── */
+.avatar-placeholder {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px;
+  position: absolute; top: 0; left: 0;
+}
+
+.avatar-ring {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  border: 2px solid rgba(255,255,255,0.35);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px;
+  position: relative;
+  animation: breathe 3s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+.avatar-ring::before {
+  content: '';
+  position: absolute; inset: -10px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.12);
+  animation: ripple-out 2.5s ease-out infinite;
+}
+@keyframes ripple-out {
+  0%   { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+.avatar-kira-name {
+  font-size: 22px; font-weight: 600; color: white;
+  letter-spacing: 0.06em;
+}
+.avatar-subtitle {
+  font-size: 13px; color: rgba(255,255,255,0.65);
+  letter-spacing: 0.02em;
+}
+.avatar-label {
+  font-size: 12px; color: rgba(255,255,255,0.5);
+  font-family: var(--mono);
+}
+
+/* ── Language Selector ──────────────────────────────── */
+.lang-select-wrap {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  margin-top: 4px;
+}
+.lang-select-wrap label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.5); font-family: var(--mono);
+}
+#langSelect {
+  appearance: none;
+  background: rgba(255,255,255,0.13);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  border-radius: 8px;
+  padding: 6px 32px 6px 12px;
+  font-size: 13px; font-family: var(--font);
+  cursor: pointer; outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='rgba(255,255,255,0.6)' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color 0.2s, background 0.2s;
+}
+#langSelect:hover  { border-color: rgba(255,255,255,0.6); background-color: rgba(255,255,255,0.2); }
+#langSelect option { background: #003865; color: white; }
+
+/* ── Start Button ───────────────────────────────────── */
+.start-btn {
+  background: white;
+  color: var(--kit-green);
+  border: none; border-radius: var(--radius);
+  padding: 11px 28px;
+  font-size: 14px; font-family: var(--font); font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  margin-top: 4px;
+}
+.start-btn:hover    { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.22); }
+.start-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+/* ── Spinner ────────────────────────────────────────── */
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,0.25);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Avatar Video ───────────────────────────────────── */
+#avatarVideo {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  display: none;
+  object-fit: contain;
+  object-position: center top;
+  background: linear-gradient(145deg, #003865 0%, #005580 40%, var(--kit-green-dark) 100%);
+  border-radius: 16px;
+}
+
+/* ════════════════════════════════════════════════════════
+   CHAT PANEL (Sidebar)
+════════════════════════════════════════════════════════ */
+#chatPanel {
+  position: fixed;
+  top: var(--header-h); right: 0;
+  width: 380px;
+  height: calc(100vh - var(--header-h));
+  background: var(--surface);
+  box-shadow: -4px 0 32px rgba(0,0,0,0.12);
+  display: flex; flex-direction: column;
+  z-index: 200;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-left: 1px solid var(--border);
+}
+#chatPanel.open { transform: translateX(0); }
+
+.chat-header {
+  height: 52px; padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.chat-title {
+  font-size: 15px; font-weight: 600; color: var(--kit-green);
+  display: flex; align-items: center; gap: 6px;
+}
+.chat-title::before {
+  content: '';
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--kit-green);
+  flex-shrink: 0;
+}
+.chat-close-btn {
+  background: none; border: none;
+  font-size: 18px; color: var(--text-muted);
+  cursor: pointer; padding: 4px 8px;
+  border-radius: 6px; line-height: 1;
+  transition: background 0.15s;
+}
+.chat-close-btn:hover { background: var(--bg); }
+
+/* ── Messages ───────────────────────────────────────── */
+#messages {
+  flex: 1; overflow-y: auto;
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 14px;
+  scroll-behavior: smooth;
+}
+#messages::-webkit-scrollbar { width: 4px; }
+#messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.empty-state {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+  color: var(--text-muted); text-align: center; padding: 24px;
+}
+.empty-icon { font-size: 36px; opacity: 0.35; }
+.empty-state p { font-size: 13px; line-height: 1.7; max-width: 260px; }
+
+/* ── Quick Chips ────────────────────────────────────── */
+.chips-row { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 8px; }
+.chip {
+  padding: 6px 14px;
+  background: var(--kit-green-soft);
+  color: var(--kit-green);
+  border-radius: 20px; font-size: 12px; font-weight: 500;
+  cursor: pointer; border: none;
+  transition: background 0.15s, transform 0.1s;
+}
+.chip:hover { background: #c6e6e2; transform: translateY(-1px); }
+
+/* ── Message Bubbles ────────────────────────────────── */
+.msg { display: flex; gap: 8px; animation: fadeUp 0.2s ease; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.msg.user { flex-direction: row-reverse; }
+
+.msg-icon {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; margin-top: 2px;
+}
+.msg.bot  .msg-icon { background: var(--kit-green-soft); border: 1px solid #c6e6e2; }
+.msg.user .msg-icon { background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); }
+
+.bubble {
+  max-width: 80%; padding: 10px 14px; border-radius: var(--radius);
+  font-size: 14px; line-height: 1.65;
+}
+.msg.bot  .bubble { background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.msg.user .bubble { background: var(--kit-green); color: white; border-bottom-right-radius: 4px; }
+
+.role-label {
+  font-size: 10px; font-weight: 600; font-family: var(--mono);
+  margin-bottom: 4px; opacity: 0.5;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+.meta { font-size: 10px; font-family: var(--mono); color: var(--text-muted); margin-top: 5px; display: flex; gap: 8px; }
+.meta .wb  { color: var(--kit-green); }
+.meta .llm { color: #f59e0b; }
+
+/* ── Streaming cursor ───────────────────────────────── */
+.cursor {
+  display: inline-block;
+  color: var(--kit-green);
+  animation: blink 1s step-end infinite;
+  font-weight: 400;
+  margin-left: 1px;
+}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ── Typing Dots ────────────────────────────────────── */
+.typing-dots { display: flex; gap: 4px; align-items: center; padding: 4px 0; }
+.typing-dots span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--kit-green);
+  animation: dot-bounce 1.2s infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40%            { transform: scale(1);   opacity: 1; }
+}
+
+/* ── Error ──────────────────────────────────────────── */
+.error-bubble {
+  background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
+  border-radius: var(--radius); padding: 10px 14px; font-size: 13px;
+}
+
+/* ════════════════════════════════════════════════════════
+   INPUT AREA
+════════════════════════════════════════════════════════ */
+.input-area {
+  padding: 12px 16px 16px; border-top: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+}
+.input-row { display: flex; gap: 8px; align-items: flex-end; }
+
+.icon-btn {
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--surface);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; color: var(--text-muted);
+  transition: all 0.2s;
+}
+.icon-btn:hover  { border-color: var(--kit-green); color: var(--kit-green); background: var(--kit-green-soft); }
+.icon-btn.active { background: #fef2f2; border-color: #ef4444; color: #ef4444; }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+#userInput {
+  flex: 1; background: var(--bg); border: 1.5px solid var(--border);
+  border-radius: var(--radius); padding: 11px 14px;
+  font-size: 14px; font-family: var(--font); color: var(--text);
+  resize: none; outline: none; min-height: 44px; max-height: 120px;
+  line-height: 1.5; transition: border-color 0.2s;
+}
+#userInput:focus { border-color: var(--kit-green); }
+#userInput::placeholder { color: var(--text-muted); }
+
+#sendBtn {
+  width: 44px; height: 44px; border-radius: var(--radius);
+  background: var(--kit-green); border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: background 0.2s, transform 0.1s;
+}
+#sendBtn:hover    { background: var(--kit-green-dark); }
+#sendBtn:active   { transform: scale(0.94); }
+#sendBtn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.hint { margin-top: 6px; font-size: 11px; color: var(--text-muted); text-align: center; }
+
+/* ════════════════════════════════════════════════════════
+   FLOATING CHAT BUTTON
+════════════════════════════════════════════════════════ */
+.chat-fab {
+  position: fixed; bottom: 24px; right: 24px;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--kit-green); border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(0,150,130,0.45);
+  z-index: 250; transition: background 0.2s, transform 0.15s, opacity 0.2s;
+}
+.chat-fab:hover  { background: var(--kit-green-dark); transform: scale(1.05); }
+.chat-fab.hidden { opacity: 0; pointer-events: none; transform: scale(0.8); }
+.fab-badge {
+  position: absolute; top: 6px; right: 6px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #ef4444; border: 2px solid white; display: none;
+}
+.chat-fab.unread .fab-badge { display: block; }
+
+/* ════════════════════════════════════════════════════════
+   AVATAR OVERLAY BUTTONS (Session + Mute)
+════════════════════════════════════════════════════════ */
+.avatar-controls {
+  position: absolute;
+  top: 14px; right: 14px;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+}
+.avatar-controls.visible { display: flex; }
+
+.ctrl-btn {
+  width: 44px; height: 44px; border-radius: 50%;
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(8px);
+  transition: transform 0.15s, background 0.2s;
+  font-size: 18px;
+}
+.ctrl-btn:hover { transform: scale(1.08); }
+
+.ctrl-btn-end {
+  background: rgba(220, 38, 38, 0.85);
+  color: white;
+  box-shadow: 0 2px 12px rgba(220,38,38,0.4);
+}
+.ctrl-btn-end:hover { background: rgba(185, 28, 28, 0.95); }
+
+.ctrl-btn-mute {
+  background: rgba(0,0,0,0.55);
+  color: white;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+.ctrl-btn-mute:hover { background: rgba(0,0,0,0.75); }
+.ctrl-btn-mute.muted { background: rgba(234,179,8,0.85); color: #1a1a1a; }
+
+/* ════════════════════════════════════════════════════════
+   IN-SESSION LANGUAGE SWITCHER
+════════════════════════════════════════════════════════ */
+.lang-switcher-bar {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.lang-switcher-bar.visible { display: flex; }
+.lang-switcher-bar label {
+  font-size: 11px; color: var(--text-muted);
+  font-family: var(--mono); text-transform: uppercase;
+  letter-spacing: 0.08em; white-space: nowrap;
+}
+#sessionLangSelect {
+  flex: 1;
+  appearance: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 5px 28px 5px 10px;
+  font-size: 13px; font-family: var(--font);
+  cursor: pointer; outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236b7280' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 0.2s;
+}
+#sessionLangSelect:focus { border-color: var(--kit-green); }
+
+.lang-switch-btn {
+  background: var(--kit-green); color: white;
+  border: none; border-radius: 8px;
+  padding: 5px 12px; font-size: 12px; font-family: var(--font);
+  font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background 0.2s;
+}
+.lang-switch-btn:hover { background: var(--kit-green-dark); }
+.lang-switch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ════════════════════════════════════════════════════════
+   MOBILE
+════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  #chatPanel { width: 100vw; border-left: none; }
+  .avatar-zone { padding: 12px; }
+}
+  </style>
+</head>
+<body>
+
+<!-- ═══ KIT HEADER ══════════════════════════════════════ -->
+<header id="kitHeader">
+  <div class="header-left">
+    <!-- KIT Fan-Mark SVG -->
+    <svg class="kit-fan-mark" viewBox="0 0 40 40" height="26" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <g fill="#009682">
+        <polygon points="38,38 31,3 38,2"/>
+        <polygon points="38,38 19,7 26,4"/>
+        <polygon points="38,38 10,15 15,10"/>
+        <polygon points="38,38 4,26 7,19"/>
+        <polygon points="38,38 2,38 3,31"/>
+      </g>
+    </svg>
+    <span class="kit-wordmark">KIT</span>
+    <span class="header-divider">|</span>
+    <span class="header-title">KIRA Studienberatung</span>
+  </div>
+  <div class="header-right">
+    <span id="activeLangBadge"></span>
+    <div class="status-dot offline" id="statusDot"></div>
+    <span id="statusText">verbinde...</span>
+  </div>
+</header>
+
+<!-- ═══ AVATAR ZONE ════════════════════════════════════ -->
+<main class="avatar-zone" id="avatarZone">
+  <div class="avatar-container">
+
+    <!-- Placeholder (vor Session-Start) -->
+    <div class="avatar-placeholder" id="avatarPlaceholder">
+      <div class="avatar-ring">🎓</div>
+      <p class="avatar-kira-name">KIRA</p>
+      <p class="avatar-subtitle">KIT Intelligente Ratsgeberin</p>
+
+      <!-- FIX 1: Sprachauswahl – wird vor Session gesetzt,
+           damit kein Hin-und-Her-Springen mehr auftreten kann -->
+      <div class="lang-select-wrap">
+        <label>Sprache / Language</label>
+        <select id="langSelect">
+          <option value="en">English</option>
+          <option value="af">Afrikaans</option>
+          <option value="ar">Arabic</option>
+          <option value="hy">Armenian</option>
+          <option value="az">Azerbaijani</option>
+          <option value="be">Belarusian</option>
+          <option value="bs">Bosnian</option>
+          <option value="bg">Bulgarian</option>
+          <option value="ca">Catalan</option>
+          <option value="zh">Chinese</option>
+          <option value="hr">Croatian</option>
+          <option value="cs">Czech</option>
+          <option value="da">Danish</option>
+          <option value="nl">Dutch</option>
+          <option value="et">Estonian</option>
+          <option value="fi">Finnish</option>
+          <option value="fr">French</option>
+          <option value="gl">Galician</option>
+          <option value="de">German</option>
+          <option value="el">Greek</option>
+          <option value="he">Hebrew</option>
+          <option value="hi">Hindi</option>
+          <option value="hu">Hungarian</option>
+          <option value="is">Icelandic</option>
+          <option value="id">Indonesian</option>
+          <option value="it">Italian</option>
+          <option value="ja">Japanese</option>
+          <option value="kn">Kannada</option>
+          <option value="kk">Kazakh</option>
+          <option value="ko">Korean</option>
+          <option value="lv">Latvian</option>
+          <option value="lt">Lithuanian</option>
+          <option value="mk">Macedonian</option>
+          <option value="ms">Malay</option>
+          <option value="mi">Maori</option>
+          <option value="mr">Marathi</option>
+          <option value="ne">Nepali</option>
+          <option value="no">Norwegian</option>
+          <option value="fa">Persian</option>
+          <option value="pl">Polish</option>
+          <option value="pt">Portuguese</option>
+          <option value="ro">Romanian</option>
+          <option value="ru">Russian</option>
+          <option value="sr">Serbian</option>
+          <option value="sk">Slovak</option>
+          <option value="sl">Slovenian</option>
+          <option value="es">Spanish</option>
+          <option value="sw">Swahili</option>
+          <option value="sv">Swedish</option>
+          <option value="tl">Tagalog</option>
+          <option value="ta">Tamil</option>
+          <option value="th">Thai</option>
+          <option value="tr">Turkish</option>
+          <option value="uk">Ukrainian</option>
+          <option value="ur">Urdu</option>
+          <option value="vi">Vietnamese</option>
+          <option value="cy">Welsh</option>
+        </select>
+      </div>
+
+      <span class="avatar-label" id="avatarLabel">Bereit zum Starten</span>
+      <button class="start-btn" id="startBtn">▶ Gespräch starten</button>
+    </div>
+
+    <!-- Live Avatar Video – Anam streamt Video + Audio hier rein -->
+    <video id="avatarVideo" autoplay playsinline></video>
+
+    <!-- Overlay-Buttons: Session beenden + Stummschalten -->
+    <div class="avatar-controls" id="avatarControls">
+      <button class="ctrl-btn ctrl-btn-mute" id="muteBtn" title="Ton stummschalten">
+        🔊
+      </button>
+      <button class="ctrl-btn ctrl-btn-end" id="endSessionBtn" title="Session beenden">
+        ✕
+      </button>
+    </div>
+  </div>
+</main>
+
+<!-- ═══ CHAT SIDEBAR ═══════════════════════════════════ -->
+<aside id="chatPanel">
+  <div class="chat-header">
+    <span class="chat-title">KIRA</span>
+    <button class="chat-close-btn" id="chatCloseBtn" aria-label="Chat schließen">✕</button>
+  </div>
+
+  <!-- In-Session Language Switcher (sichtbar sobald Avatar aktiv) -->
+  <div class="lang-switcher-bar" id="langSwitcherBar">
+    <label>🌐</label>
+    <select id="sessionLangSelect">
+      <option value="en">English</option>
+      <option value="af">Afrikaans</option>
+      <option value="ar">Arabic</option>
+      <option value="hy">Armenian</option>
+      <option value="az">Azerbaijani</option>
+      <option value="be">Belarusian</option>
+      <option value="bs">Bosnian</option>
+      <option value="bg">Bulgarian</option>
+      <option value="ca">Catalan</option>
+      <option value="zh">Chinese</option>
+      <option value="hr">Croatian</option>
+      <option value="cs">Czech</option>
+      <option value="da">Danish</option>
+      <option value="nl">Dutch</option>
+      <option value="et">Estonian</option>
+      <option value="fi">Finnish</option>
+      <option value="fr">French</option>
+      <option value="gl">Galician</option>
+      <option value="de">German</option>
+      <option value="el">Greek</option>
+      <option value="he">Hebrew</option>
+      <option value="hi">Hindi</option>
+      <option value="hu">Hungarian</option>
+      <option value="is">Icelandic</option>
+      <option value="id">Indonesian</option>
+      <option value="it">Italian</option>
+      <option value="ja">Japanese</option>
+      <option value="kn">Kannada</option>
+      <option value="kk">Kazakh</option>
+      <option value="ko">Korean</option>
+      <option value="lv">Latvian</option>
+      <option value="lt">Lithuanian</option>
+      <option value="mk">Macedonian</option>
+      <option value="ms">Malay</option>
+      <option value="mi">Maori</option>
+      <option value="mr">Marathi</option>
+      <option value="ne">Nepali</option>
+      <option value="no">Norwegian</option>
+      <option value="fa">Persian</option>
+      <option value="pl">Polish</option>
+      <option value="pt">Portuguese</option>
+      <option value="ro">Romanian</option>
+      <option value="ru">Russian</option>
+      <option value="sr">Serbian</option>
+      <option value="sk">Slovak</option>
+      <option value="sl">Slovenian</option>
+      <option value="es">Spanish</option>
+      <option value="sw">Swahili</option>
+      <option value="sv">Swedish</option>
+      <option value="tl">Tagalog</option>
+      <option value="ta">Tamil</option>
+      <option value="th">Thai</option>
+      <option value="tr">Turkish</option>
+      <option value="uk">Ukrainian</option>
+      <option value="ur">Urdu</option>
+      <option value="vi">Vietnamese</option>
+      <option value="cy">Welsh</option>
+    </select>
+    <button class="lang-switch-btn" id="langSwitchBtn">↺ Wechseln</button>
+  </div>
+
+  <div id="messages">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">💬</div>
+      <p>Willkommen bei KIRA.<br>Ich beantworte Ihre Fragen rund um das Studium am KIT.</p>
+      <div class="chips-row" id="chipsRow">
+        <button class="chip" data-msg="Wie melde ich mich für Prüfungen an?">Prüfungsanmeldung</button>
+        <button class="chip" data-msg="Wann ist die Bewerbungsfrist?">Bewerbungsfristen</button>
+        <button class="chip" data-msg="Wie beantrage ich Beurlaubung?">Beurlaubung</button>
+        <button class="chip" data-msg="Was sind die Sprechzeiten der Beratung?">Sprechzeiten</button>
+        <button class="chip" data-msg="Wie beantrage ich BAföG?">BAföG</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-row">
+      <!-- Spracheingabe (Web Speech API) -->
+      <button class="icon-btn" id="micBtn" title="Spracheingabe">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V22h-3v2h8v-2h-3v-1.06A9 9 0 0 0 21 12v-2h-2z"/>
+        </svg>
+      </button>
+      <textarea id="userInput" placeholder="Ihre Frage an KIRA..." rows="1"></textarea>
+      <button id="sendBtn">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+    <p class="hint">🎤 Einfach sprechen · Enter zum Tippen · Knopf zum Pausieren</p>
+  </div>
+</aside>
+
+<!-- ═══ FLOATING CHAT BUTTON ════════════════════════════ -->
+<button class="chat-fab" id="chatFab" aria-label="Chat öffnen">
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="white">
+    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+  </svg>
+  <span class="fab-badge" id="fabBadge"></span>
+</button>
+
+<!-- ═══════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════ -->
+<script type="module">
+import { createClient } from "@anam-ai/js-sdk";
+"use strict";
+
+// ── Konstanten ────────────────────────────────────────────
+const API_STREAM = "/chat/stream";
+const API_CHAT   = "/chat";           // Fallback ohne Streaming
+const sessionId  = "s_" + Math.random().toString(36).substr(2, 9);
+
+// ── DOM Refs ──────────────────────────────────────────────
+const chatPanel    = document.getElementById("chatPanel");
+const chatFab      = document.getElementById("chatFab");
+const chatCloseBtn = document.getElementById("chatCloseBtn");
+const avatarZone   = document.getElementById("avatarZone");
+const avatarPH     = document.getElementById("avatarPlaceholder");
+const avatarLabel  = document.getElementById("avatarLabel");
+const startBtn     = document.getElementById("startBtn");
+const avatarVideo  = document.getElementById("avatarVideo");
+const langSelect   = document.getElementById("langSelect");
+const activeLangBadge = document.getElementById("activeLangBadge");
+const micBtn           = document.getElementById("micBtn");
+const userInput        = document.getElementById("userInput");
+const sendBtn          = document.getElementById("sendBtn");
+const messagesEl       = document.getElementById("messages");
+const langSwitcherBar  = document.getElementById("langSwitcherBar");
+const avatarControls   = document.getElementById("avatarControls");
+const muteBtn          = document.getElementById("muteBtn");
+const endSessionBtn    = document.getElementById("endSessionBtn");
+const sessionLangSelect = document.getElementById("sessionLangSelect");
+const langSwitchBtn    = document.getElementById("langSwitchBtn");
+
+// ── State ─────────────────────────────────────────────────
+let anamClient   = null;
+let isProcessing = false;   // verhindert parallele Chat-Requests
+
+// ── Avatar sprechen lassen (einmaliger TTS-Call) ─────────
+// Ein einzelner talk()-Aufruf ist deutlich schneller als N Aufrufe
+// (je ein Netzwerk-Roundtrip zu Anams TTS-Server → statt N nur 1).
+async function avatarSpeak(text) {
+  if (!text || !text.trim() || !anamClient) return;
+  try {
+    await anamClient.talk(text.trim());
+  } catch (e) {
+    console.warn("[avatarSpeak] Fehler:", e);
+  }
+}
+
+// ── Chat öffnen / schließen ───────────────────────────────
+function openChat() {
+  chatPanel.classList.add("open");
+  chatFab.classList.add("hidden");
+  chatFab.classList.remove("unread");
+  avatarZone.style.right = "380px";
+}
+function closeChat() {
+  chatPanel.classList.remove("open");
+  chatFab.classList.remove("hidden");
+  avatarZone.style.right = "0";
+}
+function markUnread() {
+  if (!chatPanel.classList.contains("open")) chatFab.classList.add("unread");
+}
+
+chatFab.addEventListener("click",      openChat);
+chatCloseBtn.addEventListener("click", closeChat);
+
+// ── Health Check ──────────────────────────────────────────
+fetch("/health")
+  .then(r => r.json())
+  .then(() => setStatus("bereit", ""))
+  .catch(() => setStatus("server nicht erreichbar", "offline"));
+
+function setStatus(text, dotClass) {
+  document.getElementById("statusText").textContent = text;
+  const dot = document.getElementById("statusDot");
+  dot.className = "status-dot" + (dotClass ? " " + dotClass : "");
+}
+
+// ── Sprachauswahl ─────────────────────────────────────────
+// FIX 1: Sprache wird als inputLanguage an /anam/session-token übergeben.
+// Das Hin-und-Her-Springen entsteht, wenn Anam die Sprache während der
+// Session neu erkennt. Durch Fixieren in personaConfig wird das verhindert.
+let selectedLanguage = "de";
+langSelect.addEventListener("change", () => {
+  selectedLanguage = langSelect.value;
+});
+
+// ── Avatar starten ────────────────────────────────────────
+startBtn.addEventListener("click", startAvatar);
+
+async function startAvatar() {
+  startBtn.disabled = true;
+  selectedLanguage = langSelect.value;
+  avatarLabel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;color:rgba(255,255,255,0.8)"><div class="spinner"></div> Verbinde mit KIRA...</div>';
+  setStatus("verbindet...", "connecting");
+
+  // Mikrofon-Erlaubnis VORAB anfragen – bevor Anam startet,
+  // damit der Browser-Dialog nicht mittendrin erscheint.
+  // Stream direkt wieder schließen, VAD öffnet ihn später neu.
+  try {
+    const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    testStream.getTracks().forEach(t => t.stop());
+  } catch (err) {
+    avatarLabel.innerHTML = `<span style="color:rgba(255,100,100,0.9);font-size:12px">⚠ Mikrofon-Zugriff verweigert: ${err.message}</span>`;
+    startBtn.disabled = false;
+    return;
+  }
+
+  try {
+    // Session Token vom Backend holen – inkl. Sprachkonfiguration
+    const tokenRes = await fetch("/anam/session-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ language: selectedLanguage })
+    });
+    if (!tokenRes.ok) {
+      const err = await tokenRes.json();
+      throw new Error(err.detail || "Session Token konnte nicht erstellt werden");
+    }
+    const { sessionToken } = await tokenRes.json();
+
+    // disableInputAudio wurde entfernt (blockiert den Video-Track in manchen Browsern).
+    // Stattdessen: muteInputAudio() nach Verbindungsaufbau → Avatar hört sich selbst nicht.
+    // Der Endlosschleife wird durch das Fehlen des MESSAGE_HISTORY_UPDATED-Listeners verhindert.
+    anamClient = createClient(sessionToken);
+
+    // ── Anam Event Listener ──────────────────────────────
+    anamClient.addListener("CONNECTION_ESTABLISHED", () => {
+      avatarVideo.style.display = "block";
+      avatarPH.style.display    = "none";
+
+      // Sprachwechsler + Controls einblenden
+      showLangSwitcher();
+      langSwitchBtn.disabled = false;
+      avatarControls.classList.add("visible");
+
+      // Aktive Sprache im Header anzeigen
+      activeLangBadge.textContent = selectedLanguage.toUpperCase();
+      activeLangBadge.style.display = "inline-block";
+
+      // Anam-Mikrofon stummschalten
+      setupAnamSTT();
+      lastAnamUserText = "";
+
+      // VAD automatisch starten → User kann sofort sprechen
+      startVAD().then(() => {
+        setStatus("höre zu...", "connecting");
+      });
+
+      // Chat öffnen damit User die Transkription sieht
+      openChat();
+    });
+
+    anamClient.addListener("CONNECTION_CLOSED", () => {
+      avatarVideo.style.display = "none";
+      avatarPH.style.display    = "flex";
+      avatarLabel.textContent   = "Verbindung getrennt";
+      startBtn.disabled         = false;
+      startBtn.textContent      = "Erneut verbinden";
+      anamClient                = null;
+      activeLangBadge.style.display = "none";
+      hideLangSwitcher();
+      avatarControls.classList.remove("visible");
+      isMuted = false;
+      muteBtn.textContent = "🔊";
+      muteBtn.classList.remove("muted");
+      setStatus("getrennt", "offline");
+      // VAD stoppen wenn Session endet
+      if (vadActive) stopVAD();
+    });
+
+    // streamToVideoElement erwartet einen String-ID, keine DOM-Referenz.
+    await anamClient.streamToVideoElement("avatarVideo");
+
+  } catch (err) {
+    console.error("[Anam] Fehler:", err);
+    avatarLabel.innerHTML = `<span style="color:rgba(255,100,100,0.9);font-size:12px">⚠ ${err.message}</span>`;
+    startBtn.disabled    = false;
+    startBtn.textContent = "Erneut versuchen";
+    anamClient           = null;
+    setStatus("Verbindungsfehler", "offline");
+  }
+}
+
+// ── Seite verlassen ───────────────────────────────────────
+window.addEventListener("beforeunload", () => {
+  if (anamClient) anamClient.stopStreaming();
+});
+
+// ── In-Session Sprachwechsel ──────────────────────────────
+// Wenn der Avatar bereits läuft, eine neue Session mit der
+// gewählten Sprache starten. Die alte Session wird beendet.
+langSwitchBtn.addEventListener("click", async () => {
+  const newLang = sessionLangSelect.value;
+  if (newLang === selectedLanguage) return;
+
+  langSwitchBtn.disabled = true;
+  langSwitchBtn.textContent = "...";
+  setStatus("Sprache wechselt...", "connecting");
+
+  // Alte Session beenden
+  if (anamClient) {
+    try { anamClient.stopStreaming(); } catch (_) {}
+    anamClient = null;
+  }
+
+  // Kurz warten damit WebRTC sauber abbaut
+  await new Promise(r => setTimeout(r, 600));
+
+  // Neue Sprache setzen und Session starten
+  selectedLanguage = newLang;
+  langSelect.value = newLang;
+
+  // Switcher im Chat auf neue Sprache setzen + Badge updaten
+  const langNames = {
+    en:"English",af:"Afrikaans",ar:"Arabic",hy:"Armenian",az:"Azerbaijani",
+    be:"Belarusian",bs:"Bosnian",bg:"Bulgarian",ca:"Catalan",zh:"Chinese",
+    hr:"Croatian",cs:"Czech",da:"Danish",nl:"Dutch",et:"Estonian",fi:"Finnish",
+    fr:"French",gl:"Galician",de:"German",el:"Greek",he:"Hebrew",hi:"Hindi",
+    hu:"Hungarian",is:"Icelandic",id:"Indonesian",it:"Italian",ja:"Japanese",
+    kn:"Kannada",kk:"Kazakh",ko:"Korean",lv:"Latvian",lt:"Lithuanian",
+    mk:"Macedonian",ms:"Malay",mi:"Maori",mr:"Marathi",ne:"Nepali",no:"Norwegian",
+    fa:"Persian",pl:"Polish",pt:"Portuguese",ro:"Romanian",ru:"Russian",sr:"Serbian",
+    sk:"Slovak",sl:"Slovenian",es:"Spanish",sw:"Swahili",sv:"Swedish",tl:"Tagalog",
+    ta:"Tamil",th:"Thai",tr:"Turkish",uk:"Ukrainian",ur:"Urdu",vi:"Vietnamese",cy:"Welsh"
+  };
+  activeLangBadge.textContent = newLang.toUpperCase();
+
+  // System-Nachricht im Chat
+  const sysMsg = document.createElement("div");
+  sysMsg.style.cssText = "text-align:center;font-size:11px;color:var(--text-muted);font-family:var(--mono);padding:6px 0;";
+  sysMsg.textContent = `↺ Language changed to ${langNames[newLang] || newLang}`;
+  messagesEl.appendChild(sysMsg);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  langSwitchBtn.textContent = "↺ Wechseln";
+
+  // Neue Avatar-Session starten
+  await startAvatar();
+});
+
+// Switcher-Bar zeigen sobald Avatar verbunden
+function showLangSwitcher() {
+  langSwitcherBar.classList.add("visible");
+  sessionLangSelect.value = selectedLanguage;
+}
+function hideLangSwitcher() {
+  langSwitcherBar.classList.remove("visible");
+}
+
+// ════════════════════════════════════════════════════════
+// CHAT – Streaming (FIX 3: Live TTS)
+//
+// Ablauf:
+// 1. Nutzer sendet Nachricht
+// 2. /chat/stream liefert SSE-Tokens von Gemini
+// 3. Frontend zeigt Text schrittweise an (Stream-Bubble)
+// 4. Vollständige Sätze werden sofort an anamClient.talk() übergeben
+// 5. Avatar fängt an zu sprechen, noch während Gemini schreibt
+// ════════════════════════════════════════════════════════
+
+function quickSend(text) {
+  openChat();
+  userInput.value = text;
+  sendMessage();
+}
+
+// Chip-Buttons
+document.querySelectorAll(".chip").forEach(chip => {
+  chip.addEventListener("click", () => quickSend(chip.dataset.msg));
+});
+
+userInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+userInput.addEventListener("input", function () {
+  this.style.height = "auto";
+  this.style.height = Math.min(this.scrollHeight, 120) + "px";
+});
+
+async function sendMessage(skipUserBubble = false) {
+  const text = userInput.value.trim();
+  if (!text || isProcessing) return;
+
+  isProcessing = true;
+  userInput.value = "";
+  userInput.style.height = "auto";
+
+  // Empty-State entfernen
+  const emptyState = document.getElementById("emptyState");
+  if (emptyState) emptyState.remove();
+
+  // Bubble nur anzeigen wenn nicht bereits vom STT-Handler gezeigt
+  if (!skipUserBubble) addMessage("user", text);
+  sendBtn.disabled = true;
+  setStatus("denkt nach...", "connecting");
+
+  // Streaming Bot-Nachricht anlegen
+  const msgId = "stream-" + Date.now();
+  const msgEl = createStreamingMessage(msgId);
+
+  let fullText   = "";
+  let sourceMeta = null;
+
+  try {
+    const res = await fetch(API_STREAM, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: text,
+        session_id: sessionId,
+        language: selectedLanguage
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+
+    // SSE lesen – Text progressiv im Chat anzeigen,
+    // Avatar spricht EINMAL nach Abschluss (ein TTS-Request statt N).
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let leftover  = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const raw = leftover + decoder.decode(value, { stream: true });
+      const lines = raw.split("\n");
+      leftover = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr) continue;
+
+        let data;
+        try { data = JSON.parse(jsonStr); } catch { continue; }
+
+        if (data.error) {
+          finalizeMessage(msgId, data.text || "Fehler aufgetreten.", null);
+          break;
+        }
+
+        if (data.text) {
+          fullText += data.text;
+          // Text sofort im Chat aktualisieren (progressive Anzeige)
+          updateStreamingMessage(msgId, fullText);
+        }
+
+        if (data.done) {
+          sourceMeta = data.source || null;
+          finalizeMessage(msgId, fullText, sourceMeta);
+          markUnread();
+          // Avatar spricht den vollständigen Text in EINEM TTS-Request.
+          // Das ist deutlich schneller als Satz-für-Satz (N Roundtrips → 1).
+          if (fullText.trim()) avatarSpeak(fullText.trim());
+        }
+      }
+    }
+
+  } catch (err) {
+    // Fallback: normale (nicht-streamende) Antwort
+    console.warn("[stream] Fehler, versuche Fallback:", err);
+    removeStreamingMessage(msgId);
+    await sendMessageFallback(text);
+  } finally {
+    sendBtn.disabled = false;
+    setStatus("bereit", "");
+    isProcessing = false;
+  }
+}
+
+// Fallback falls SSE nicht verfügbar
+async function sendMessageFallback(text) {
+  const typingId = showTyping();
+  try {
+    const res = await fetch(API_CHAT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, session_id: sessionId, language: selectedLanguage })
+    });
+    removeTyping(typingId);
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail); }
+    const data = await res.json();
+    addMessage("bot", data.answer, { source: data.source, latency_ms: data.latency_ms });
+    avatarSpeak(data.answer);
+    markUnread();
+  } catch (err) {
+    removeTyping(typingId);
+    showError(err.message);
+  }
+}
+
+// ── Message DOM Helpers ───────────────────────────────────
+function addMessage(role, text, meta = null) {
+  const msg    = document.createElement("div");
+  msg.className = `msg ${role}`;
+  const icon   = document.createElement("div");
+  icon.className = "msg-icon";
+  icon.textContent = role === "bot" ? "🎓" : "👤";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  const label  = document.createElement("div");
+  label.className = "role-label";
+  label.textContent = role === "bot" ? "KIRA" : "Sie";
+  const content = document.createElement("div");
+  content.textContent = text;
+  bubble.appendChild(label);
+  bubble.appendChild(content);
+  if (meta) {
+    const m   = document.createElement("div");
+    m.className = "meta";
+    const cls = meta.source === "Wissensbasis" ? "wb" : "llm";
+    const ico = meta.source === "Wissensbasis" ? "📚" : "🧠";
+    m.innerHTML = `<span class="${cls}">${ico} ${meta.source}</span>${meta.latency_ms ? `<span>${meta.latency_ms}ms</span>` : ""}`;
+    bubble.appendChild(m);
+  }
+  msg.appendChild(icon);
+  msg.appendChild(bubble);
+  messagesEl.appendChild(msg);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return msg;
+}
+
+// Streaming-Nachricht (leere Bubble mit blinkendem Cursor)
+function createStreamingMessage(id) {
+  const msg    = document.createElement("div");
+  msg.className = "msg bot";
+  msg.id = id;
+  const icon   = document.createElement("div");
+  icon.className = "msg-icon";
+  icon.textContent = "🎓";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  const label  = document.createElement("div");
+  label.className = "role-label";
+  label.textContent = "KIRA";
+  const content = document.createElement("div");
+  content.className = "stream-content";
+  content.innerHTML = '<span class="cursor">▋</span>';
+  bubble.appendChild(label);
+  bubble.appendChild(content);
+  msg.appendChild(icon);
+  msg.appendChild(bubble);
+  messagesEl.appendChild(msg);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return msg;
+}
+
+// Text laufend aktualisieren
+function updateStreamingMessage(id, text) {
+  const msg = document.getElementById(id);
+  if (!msg) return;
+  const content = msg.querySelector(".stream-content");
+  if (content) {
+    content.innerHTML = escapeHtml(text).replace(/\n/g, "<br>") + '<span class="cursor">▋</span>';
+  }
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// Cursor entfernen + optionale Quell-Meta hinzufügen
+function finalizeMessage(id, text, source) {
+  const msg = document.getElementById(id);
+  if (!msg) return;
+  const content = msg.querySelector(".stream-content");
+  if (content) {
+    content.innerHTML = escapeHtml(text).replace(/\n/g, "<br>");
+    content.classList.remove("stream-content");
+  }
+  if (source) {
+    const bubble = msg.querySelector(".bubble");
+    const m      = document.createElement("div");
+    m.className  = "meta";
+    const cls = source === "Wissensbasis" ? "wb" : "llm";
+    const ico = source === "Wissensbasis" ? "📚" : "🧠";
+    m.innerHTML  = `<span class="${cls}">${ico} ${source}</span>`;
+    bubble.appendChild(m);
+  }
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function removeStreamingMessage(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+function showTyping() {
+  const id = "typing-" + Date.now();
+  const msg = document.createElement("div");
+  msg.className = "msg bot"; msg.id = id;
+  const icon  = document.createElement("div"); icon.className = "msg-icon"; icon.textContent = "🎓";
+  const bub   = document.createElement("div"); bub.className  = "bubble";
+  const dots  = document.createElement("div"); dots.className = "typing-dots";
+  dots.innerHTML = "<span></span><span></span><span></span>";
+  bub.appendChild(dots); msg.appendChild(icon); msg.appendChild(bub);
+  messagesEl.appendChild(msg);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return id;
+}
+function removeTyping(id) { const el = document.getElementById(id); if (el) el.remove(); }
+function showError(msg) {
+  const err = document.createElement("div");
+  err.className = "error-bubble";
+  err.textContent = "⚠ " + msg;
+  messagesEl.appendChild(err);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+function escapeHtml(text) {
+  return text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ── MediaRecorder → /stt (Gemini) ────────────────────────
+
+// ════════════════════════════════════════════════════════
+// SPRACHEINGABE STRATEGIE:
+//
+// Anam's eingebautes STT transkribiert IMMER auf Englisch –
+// unabhängig von der eingestellten Sprache. Deshalb:
+//
+// 1. Anam-Mikrofon wird nach Verbindungsaufbau dauerhaft
+//    stummgeschaltet (muteInputAudio) → Anam hört den User nie
+//
+// 2. Alle Spracheingabe läuft ausschließlich über den
+//    Mic-Button → MediaRecorder → /stt (Gemini) → korrekter Text
+//
+// 3. Der transkribierte Text wird per anamClient.talk() an den
+//    Avatar weitergegeben (Avatar spricht die Antwort)
+// ════════════════════════════════════════════════════════
+
+let lastAnamUserText = "";
+
+function setupAnamSTT() {
+  if (!anamClient) return;
+
+  // Anam-Mikrofon sofort und dauerhaft stummschalten
+  try { anamClient.muteInputAudio(); } catch (_) {}
+
+  // Avatar spricht → Status anzeigen (kein unmute mehr!)
+  anamClient.addListener("AVATAR_TALKING_STARTED", () => {
+    setStatus("spricht...", "speaking");
+  });
+  anamClient.addListener("AVATAR_TALKING_ENDED", () => {
+    setStatus("bereit", "");
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// AUTOMATISCHE SPRACHEINGABE (VAD – Voice Activity Detection)
+//
+// Funktionsweise:
+// 1. Mic-Button aktiviert dauerhaftes Zuhören
+// 2. AudioContext analysiert Lautstärke in Echtzeit
+// 3. Sobald Stimme erkannt → Aufnahme startet automatisch
+// 4. Nach 1.5s Stille → Aufnahme stoppt → /stt (Gemini)
+// 5. Kein manuelles Stoppen nötig
+// ════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════
+// AUTOMATISCHE SPRACHEINGABE (VAD – Voice Activity Detection)
+// ════════════════════════════════════════════════════════
+
+let vadStream      = null;
+let vadActive      = false;
+let isRecording    = false;
+let mediaRecorder  = null;
+let audioChunks    = [];
+let mimeType       = "";   // einmal bestimmt, dann fixiert
+
+const SILENCE_THRESHOLD = 0.05;  // Erhöht von 0.015 → weniger sensitiv für Hintergrundgeräusche
+const SILENCE_DURATION  = 1500;
+const MIN_SPEECH_MS     = 400;
+
+let silenceTimer    = null;
+let speechStartTime = null;
+let audioCtx        = null;
+let analyser        = null;
+let vadLoopId       = null;
+
+micBtn.addEventListener("click", async () => {
+  if (vadActive) { stopVAD(); return; }
+  await startVAD();
+});
+
+async function startVAD() {
+  try {
+    vadStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
+  } catch (err) {
+    showError("Mikrofon-Zugriff verweigert: " + err.message);
+    return;
+  }
+
+  // MIME-Typ: Browser selbst entscheiden lassen wenn nichts unterstützt wird
+  if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+    mimeType = "audio/webm;codecs=opus";
+  } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+    mimeType = "audio/webm";
+  } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+    mimeType = "audio/mp4";
+  } else {
+    mimeType = ""; // Browser-Default
+  }
+
+  audioCtx = new AudioContext();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  audioCtx.createMediaStreamSource(vadStream).connect(analyser);
+
+  vadActive = true;
+  micBtn.classList.add("active");
+  micBtn.title = "Zuhören aktiv — nochmal klicken zum Deaktivieren";
+  setStatus("höre zu...", "connecting");
+  vadLoop();
+}
+
+function stopVAD() {
+  vadActive = false;
+  cancelAnimationFrame(vadLoopId);
+  clearTimeout(silenceTimer);
+  if (mediaRecorder && isRecording) {
+    try { mediaRecorder.stop(); } catch (_) {}
+  }
+  isRecording = false;
+  if (vadStream) { vadStream.getTracks().forEach(t => t.stop()); vadStream = null; }
+  if (audioCtx)  { audioCtx.close(); audioCtx = null; }
+  micBtn.classList.remove("active");
+  micBtn.title = "Spracheingabe aktivieren";
+  setStatus("bereit", "");
+}
+
+function getRMS() {
+  const buf = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+  return Math.sqrt(sum / buf.length);
+}
+
+function vadLoop() {
+  if (!vadActive) return;
+  vadLoopId = requestAnimationFrame(vadLoop);
+  const isSpeech = getRMS() > SILENCE_THRESHOLD;
+
+  if (isSpeech && !isRecording) {
+    startRecording();
+  } else if (isRecording && isSpeech) {
+    // Stimme da → Stille-Timer zurücksetzen
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(finishRecording, SILENCE_DURATION);
+  }
+}
+
+function startRecording() {
+  if (!vadStream || !vadActive) return;
+  try {
+    // Neuen MediaRecorder auf dem laufenden Stream erstellen
+    mediaRecorder = mimeType
+      ? new MediaRecorder(vadStream, { mimeType })
+      : new MediaRecorder(vadStream);
+  } catch (err) {
+    showError("Aufnahme konnte nicht gestartet werden: " + err.message);
+    return;
+  }
+
+  audioChunks     = [];
+  isRecording     = true;
+  speechStartTime = Date.now();
+
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) audioChunks.push(e.data);
+  };
+
+  mediaRecorder.onstop = async () => {
+    isRecording = false;
+    clearTimeout(silenceTimer);
+
+    const duration = Date.now() - speechStartTime;
+    const actualMime = mediaRecorder.mimeType || mimeType || "audio/webm";
+    const blob = new Blob(audioChunks, { type: actualMime });
+    audioChunks = [];
+
+    if (blob.size < 1000 || duration < MIN_SPEECH_MS || !vadActive) return;
+
+    setStatus("transkribiert...", "connecting");
+    const ext = actualMime.includes("mp4") ? "mp4" : "webm";
+
+    try {
+      const formData = new FormData();
+      formData.append("audio", blob, `recording.${ext}`);
+      formData.append("language", selectedLanguage);
+
+      const res  = await fetch("/stt", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "STT Fehler");
+
+      const transcript = data.text?.trim();
+      if (!transcript) return;
+
+      openChat();
+      const emptyState = document.getElementById("emptyState");
+      if (emptyState) emptyState.remove();
+      addMessage("user", transcript);
+      userInput.value = transcript;
+      sendMessage(true);
+
+    } catch (err) {
+      showError("Spracherkennung fehlgeschlagen: " + err.message);
+    } finally {
+      if (vadActive) setStatus("höre zu...", "connecting");
+    }
+  };
+
+  mediaRecorder.start(250);
+  // Stille-Timer initial starten (falls nur kurzes Geräusch)
+  silenceTimer = setTimeout(finishRecording, SILENCE_DURATION);
+}
+
+function finishRecording() {
+  if (mediaRecorder && isRecording && mediaRecorder.state !== "inactive") {
+    try { mediaRecorder.stop(); } catch (_) {}
+  }
+}
+
+// ── Session beenden Button ───────────────────────────────
+endSessionBtn.addEventListener("click", () => {
+  if (!anamClient) return;
+  if (!confirm("Gespräch beenden?")) return;
+
+  try { anamClient.stopStreaming(); } catch (_) {}
+  anamClient = null;
+
+  // Zurück zum Placeholder
+  avatarVideo.style.display = "none";
+  avatarPH.style.display    = "flex";
+  avatarLabel.textContent   = "Bereit zum Starten";
+  startBtn.disabled         = false;
+  startBtn.textContent      = "▶ Gespräch starten";
+  activeLangBadge.style.display = "none";
+  avatarControls.classList.remove("visible");
+  hideLangSwitcher();
+  isMuted = false;
+  muteBtn.textContent = "🔊";
+  muteBtn.classList.remove("muted");
+  setStatus("bereit", "offline");
+
+  // System-Nachricht im Chat
+  if (document.getElementById("messages").children.length > 0) {
+    const sysMsg = document.createElement("div");
+    sysMsg.style.cssText = "text-align:center;font-size:11px;color:var(--text-muted);font-family:var(--mono);padding:8px 0;";
+    sysMsg.textContent = "── Session beendet ──";
+    document.getElementById("messages").appendChild(sysMsg);
+    document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
+  }
+});
+
+// ── Stummschalt-Button ────────────────────────────────────
+let isMuted = false;
+
+muteBtn.addEventListener("click", () => {
+  if (!avatarVideo) return;
+  isMuted = !isMuted;
+  avatarVideo.muted = isMuted;
+
+  if (isMuted) {
+    muteBtn.textContent = "🔇";
+    muteBtn.classList.add("muted");
+    muteBtn.title = "Ton einschalten";
+  } else {
+    muteBtn.textContent = "🔊";
+    muteBtn.classList.remove("muted");
+    muteBtn.title = "Ton stummschalten";
+  }
+});
+
+// Send-Button
+sendBtn.addEventListener("click", sendMessage);
+</script>
+</body>
+</html>
