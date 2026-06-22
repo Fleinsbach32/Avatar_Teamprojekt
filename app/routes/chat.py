@@ -35,7 +35,7 @@ async def chat(request: ChatRequest):
         kontext, kontext_anweisung, beste_distanz = await asyncio.to_thread(
             build_rag_context, request.message, request.studiengang
         )
-    except Exception as e:
+    except Exception:
         logging.error("/chat RAG Fehler", exc_info=True)
 
         async def rag_error_stream():

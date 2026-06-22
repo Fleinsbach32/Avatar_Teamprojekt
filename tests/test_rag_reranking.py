@@ -55,7 +55,7 @@ def test_rerank_fewer_docs_than_top_k(monkeypatch):
     assert result == ["x", "y"]
 
 
-def test_standard_search_fetches_15_candidates_and_reranks(monkeypatch):
+def test_standard_search_fetches_8_candidates_and_reranks(monkeypatch):
     """Einstufige Suche (kein Studiengang) holt 8 Kandidaten und rerankt auf 6."""
     mock_reranker = MagicMock()
     mock_reranker.predict.return_value = list(range(7, -1, -1))  # 7..0
