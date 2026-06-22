@@ -82,3 +82,46 @@ def test_standard_search_fetches_15_candidates_and_reranks(monkeypatch):
     # Kontext enthält maximal 6 Chunks
     chunk_count = kontext.count("\n\n") + 1 if kontext else 0
     assert chunk_count == 6
+
+
+def test_zweistufige_suche_kombiniert_und_rerankt(monkeypatch):
+    """Zweistufige Suche (Studiengang gewählt) kombiniert Handbuch- und
+    allgemeine Chunks, rerankt auf 6."""
+    mock_reranker = MagicMock()
+    mock_reranker.predict.return_value = [float(i) for i in range(16, 0, -1)]
+    monkeypatch.setattr(rag_module, "reranker", mock_reranker)
+
+    prog_docs = [f"prog_{i}" for i in range(10)]
+    prog_dists = [0.2 + i * 0.01 for i in range(10)]
+    all_docs = [f"all_{i}" for i in range(6)]
+    all_dists = [0.35 + i * 0.01 for i in range(6)]
+
+    call_count = 0
+
+    def fake_query(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        where = kwargs.get("where", {})
+        if where.get("program") == "winfo_bsc":
+            n = kwargs["n_results"]
+            return {"documents": [prog_docs[:n]], "distances": [prog_dists[:n]]}
+        n = kwargs["n_results"]
+        return {"documents": [all_docs[:n]], "distances": [all_dists[:n]]}
+
+    mock_collection = MagicMock()
+    mock_collection.query.side_effect = lambda **kw: fake_query(**kw)
+    monkeypatch.setattr(rag_module, "collection", mock_collection)
+
+    kontext, anweisung, distanz = rag_module.build_rag_context(
+        "Welche Module gibt es?", studiengang="winfo_bsc"
+    )
+
+    # Reranker wurde aufgerufen
+    assert mock_reranker.predict.called
+
+    # Kontext enthält maximal 6 Chunks
+    chunk_count = kontext.count("\n\n") + 1 if kontext else 0
+    assert chunk_count <= 6
+
+    # beste_distanz ist das Minimum der kombinierten Distanzen
+    assert distanz == pytest.approx(min(prog_dists[0], all_dists[0]), abs=0.01)

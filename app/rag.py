@@ -217,19 +217,20 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
     # Bei Pflichtmodul-Fragen werden mehr Studiengang-Chunks abgerufen.
     is_pflicht = any(kw in query.lower() for kw in ("pflichtmodul", "pflicht", "orientierungsprüfung", "orientierungspruefung"))
     if studiengang and studiengang in STUDIENGANG_FILES:
-        prog_n = 8 if is_pflicht else 4
+        prog_n = 15 if is_pflicht else 10
         # Stufe 1: Handbuch des gewählten Studiengangs (Priorität)
         prog_r = _query_safe({"program": studiengang}, prog_n, query_texts=[query])
         prog_docs  = prog_r["documents"][0]
         prog_dists = prog_r["distances"][0]
         # Stufe 2: allgemeiner Inhalt (FAQ, Info, Web)
-        all_r  = _query_safe({"program": "all"}, 3, query_texts=[query])
+        all_r  = _query_safe({"program": "all"}, 6, query_texts=[query])
         all_docs  = all_r["documents"][0]
         all_dists = all_r["distances"][0]
-        # Handbuch-Chunks zuerst, dann allgemeine (max. 8 bei Pflicht, sonst 6)
-        limit = prog_n + 2
-        docs  = (prog_docs + all_docs)[:limit]
-        dists = (prog_dists + all_dists)[:limit]
+        # Kombinieren und via Cross-Encoder auf 6 reranken
+        combined_docs  = prog_docs + all_docs
+        combined_dists = prog_dists + all_dists
+        docs  = rerank(combined_docs, query, top_k=6)
+        dists = combined_dists
         beste_distanz = min(dists) if dists else 1.0
     else:
         results = _query_safe(where, 15, query_texts=[query])
