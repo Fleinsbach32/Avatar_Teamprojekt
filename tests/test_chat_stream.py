@@ -230,6 +230,11 @@ def test_chat_uses_kira_persona(mock_client, mock_collection):
     assert "Karlsruher Institut für Technologie" in prompt
 
 
+def test_chat_message_too_long_rejected():
+    response = test_client.post("/chat", json={"message": "x" * 2001, "session_id": "s_long"})
+    assert response.status_code == 422
+
+
 @patch("app.rag.collection")
 @patch("app.routes.chat.client")
 def test_chat_context_limit_600(mock_client, mock_collection):

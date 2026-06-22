@@ -5,7 +5,7 @@ import time
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.gemini import client, gemini_config, SSE_HEADERS
 from app.prompts import build_prompt
@@ -18,7 +18,7 @@ CHAT_RETRY_DELAY = 2
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=2000)
     session_id: str = "default"
     lang: str = "de"
     studiengang: str | None = None

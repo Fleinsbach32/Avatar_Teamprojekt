@@ -7,7 +7,7 @@ from urllib.parse import quote
 import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.gemini import client, gemini_config, SSE_HEADERS
 from app.prompts import build_prompt
@@ -53,7 +53,7 @@ class TavusEndRequest(BaseModel):
 
 class TavusMessageRequest(BaseModel):
     conversation_id: str
-    message: str
+    message: str = Field(..., max_length=2000)
 
     @field_validator("message")
     @classmethod

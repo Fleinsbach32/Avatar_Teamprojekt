@@ -207,6 +207,14 @@ def test_tavus_message_missing_api_key():
     assert response.status_code == 500
 
 
+def test_tavus_message_too_long_rejected():
+    response = test_client.post("/tavus/message", json={
+        "conversation_id": "conv_abc123",
+        "message": "x" * 2001
+    })
+    assert response.status_code == 422
+
+
 @patch("app.routes.tavus._http")
 def test_tavus_message_timeout(mock_http):
     import httpx as real_httpx
