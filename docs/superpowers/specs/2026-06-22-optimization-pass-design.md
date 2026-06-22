@@ -10,7 +10,8 @@ Latenz senken, Studiengang-Filter zuverlässig machen, Prompts empathischer und
 konsistenter gestalten, UI (Dropdown + Sprachumschalter) verbessern, Code
 reviewen/aufräumen, Doku aktualisieren.
 
-Reihenfolge: **A → B → C → D → E → F → G** (Latenz/Filter zuerst, da akute Probleme).
+Reihenfolge: **A → B → C → D → E → F → G → H** (Latenz/Filter zuerst, da akute
+Probleme; H = abschließendes ganzheitliches Review nachdem alles steht).
 
 ## Getroffene Entscheidungen
 
@@ -182,6 +183,33 @@ DB-Pfad konsistent.
   Prompts, UI, Review-Fixes).
 
 **Akzeptanz:** README spiegelt Endzustand; Dev-Log dokumentiert die Session.
+
+---
+
+## Workstream H — Abschließendes ganzheitliches Code-Review & Optimierung
+
+**Ziel:** Nachdem A–G stehen, ein unabhängiges Review über die **gesamte**
+Codebasis (nicht nur die geänderten Dateien) mit Fokus auf Effizienz,
+Latenz-Hotspots, Edge Cases, Bugs und Konsistenz. Findings, die klein und
+risikoarm sind, werden direkt umgesetzt; größere werden dokumentiert.
+
+**Vorgehen:**
+- Durchsicht aller Module unter `app/` (`main.py`, `rag.py`, `gemini.py`,
+  `session.py`, `prompts.py`, `routes/*`) und `scripts/` auf:
+  - **Effizienz/Latenz:** redundante DB-Queries, unnötige Modell-Aufrufe,
+    synchrone Blocker im Async-Pfad, zu große Kontextfenster (`doc[:600]` × N).
+  - **Edge Cases:** leere/sehr lange Eingaben, fehlende Env-Variablen, leere
+    ChromaDB, Sprach-Fallbacks, gleichzeitige Sessions (globaler
+    `active_voice_prefs`).
+  - **Bugs/Konsistenz:** Fehlerbehandlung in SSE-Streams, Exception-Swallowing
+    (`_query_safe`), uneinheitliche Distanz-/Quelle-Logik.
+- **Lauffähigkeit prüfen:** `pytest tests/` grün, `python scripts/check_db.py`
+  ok, App startet ohne Fehler (Import-Check `python -c "import app.main"`).
+- Kleine, sichere Optimierungen sofort anwenden; alles andere als nummerierte
+  Liste im Dev-Log (Workstream G) festhalten.
+
+**Akzeptanz:** Review-Liste erstellt; risikoarme Findings umgesetzt; alle Tests
+grün; verbleibende Punkte dokumentiert.
 
 ---
 
