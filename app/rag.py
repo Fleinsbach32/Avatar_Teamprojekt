@@ -93,12 +93,12 @@ def _module_name_from_what_is_question(query: str) -> str | None:
 
 def _contains_variants(name: str) -> list[str]:
     """Erzeugt Schreibvarianten für where_document $contains (Case-Varianten
-    + erster Bestandteil als Fallback bei mehrteiligen Namen)."""
+    + erstes Wort ab 8 Zeichen als Fallback — kürzer ist oft zu generisch)."""
     variants = [name, name.title(), name.capitalize(), name.lower()]
     words = name.split()
     if len(words) > 1:
         for w in words:
-            if len(w) >= 4:
+            if len(w) >= 8:
                 variants.extend([w, w.title(), w.lower()])
                 break
     return list(dict.fromkeys(v for v in variants if v))
@@ -295,7 +295,7 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
             f" → final={len(docs)} chunks"
         )
     else:
-        results = _query_safe(where, 15, query_texts=[query])
+        results = _query_safe(where, 8, query_texts=[query])
         docs  = rerank(results["documents"][0], query, top_k=6)
         dists = results["distances"][0]
         beste_distanz = dists[0] if dists else 1.0

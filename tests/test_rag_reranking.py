@@ -56,13 +56,13 @@ def test_rerank_fewer_docs_than_top_k(monkeypatch):
 
 
 def test_standard_search_fetches_15_candidates_and_reranks(monkeypatch):
-    """Einstufige Suche (kein Studiengang) holt 15 Kandidaten und rerankt auf 6."""
+    """Einstufige Suche (kein Studiengang) holt 8 Kandidaten und rerankt auf 6."""
     mock_reranker = MagicMock()
-    mock_reranker.predict.return_value = list(range(14, -1, -1))  # 14..0
+    mock_reranker.predict.return_value = list(range(7, -1, -1))  # 7..0
     monkeypatch.setattr(rag_module, "reranker", mock_reranker)
 
-    fake_docs = [f"doc_{i}" for i in range(15)]
-    fake_dists = [0.3 + i * 0.01 for i in range(15)]
+    fake_docs = [f"doc_{i}" for i in range(8)]
+    fake_dists = [0.3 + i * 0.01 for i in range(8)]
     mock_collection = MagicMock()
     mock_collection.query.return_value = {
         "documents": [fake_docs],
@@ -72,9 +72,9 @@ def test_standard_search_fetches_15_candidates_and_reranks(monkeypatch):
 
     kontext, anweisung, distanz = rag_module.build_rag_context("Wie bewerbe ich mich?")
 
-    # ChromaDB wurde mit n_results=15 aufgerufen
+    # ChromaDB wurde mit n_results=8 aufgerufen
     call_kwargs = mock_collection.query.call_args_list[0][1]
-    assert call_kwargs["n_results"] == 15
+    assert call_kwargs["n_results"] == 8
 
     # Reranker wurde aufgerufen
     assert mock_reranker.predict.called
@@ -246,3 +246,29 @@ def test_rag_warns_when_no_handbook_chunks_for_studiengang(caplog):
             build_rag_context("Welche Pflichtmodule gibt es?", studiengang="wing_bsc")
 
     assert any("Keine Handbuch-Chunks" in r.message for r in caplog.records)
+
+
+# ── Einstufige Suche: n_results 8 statt 15 ───────────────────────────────────
+
+def test_single_stage_uses_8_results_not_15():
+    from unittest.mock import patch
+    from app.rag import build_rag_context
+
+    with patch("app.rag.collection") as mock_coll:
+        mock_coll.query.return_value = {"documents": [[]], "distances": [[]]}
+        build_rag_context("Wie bewerbe ich mich?")   # kein Studiengang → einstufig
+
+    assert mock_coll.query.call_count == 1
+    assert mock_coll.query.call_args.kwargs["n_results"] == 8
+
+
+# ── _contains_variants: kurzes erstes Wort nicht als Fallback ────────────────
+
+def test_contains_variants_skips_short_first_word_as_fallback():
+    from app.rag import _contains_variants
+
+    # "Risk" hat 4 Zeichen (< 8) — soll NICHT als Standalone-Fallback hinzugefügt werden.
+    # "Analysis" hat 8 Zeichen (>= 8) — wird stattdessen als erstes langes Wort gewählt.
+    variants = _contains_variants("Risk Analysis")
+    assert "risk" not in variants          # "Risk" (4 Zeichen) nicht standalone
+    assert "analysis" in variants          # "Analysis" (8 Zeichen) ist der Fallback
