@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 import chromadb
 from chromadb.utils import embedding_functions
 from sentence_transformers import CrossEncoder
@@ -272,8 +273,12 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
     is_pflicht = any(kw in query.lower() for kw in ("pflichtmodul", "pflicht", "orientierungsprüfung", "orientierungspruefung"))
     if studiengang and studiengang in STUDIENGANG_FILES:
         prog_n = 12 if is_pflicht else 8
-        # Stufe 1: Handbuch des gewählten Studiengangs (Priorität)
-        prog_r = _query_safe({"program": studiengang}, prog_n, query_texts=[query])
+        # Stufe 1 + 2 parallel: beide Queries sind unabhängig
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            fut_prog = pool.submit(_query_safe, {"program": studiengang}, prog_n, query_texts=[query])
+            fut_all  = pool.submit(_query_safe, {"program": "all"}, 4, query_texts=[query])
+            prog_r   = fut_prog.result()
+            all_r    = fut_all.result()
         prog_docs  = prog_r["documents"][0]
         if not prog_docs:
             logging.warning(
@@ -281,10 +286,8 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
                 f"— Filter greift möglicherweise nicht."
             )
         prog_dists = prog_r["distances"][0]
-        # Stufe 2: allgemeiner Inhalt (FAQ, Info, Web)
-        all_r  = _query_safe({"program": "all"}, 4, query_texts=[query])
-        all_docs  = all_r["documents"][0]
-        all_dists = all_r["distances"][0]
+        all_docs   = all_r["documents"][0]
+        all_dists  = all_r["distances"][0]
         # Kombinieren mit garantierter Handbuch-Priorität (max. 6 Chunks)
         docs = _merge_handbook_priority(prog_docs, all_docs, reranker, query, top_k=6, min_handbook=3)
         combined_dists = prog_dists + all_dists

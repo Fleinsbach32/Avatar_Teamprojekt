@@ -239,9 +239,14 @@ def test_rag_warns_when_no_handbook_chunks_for_studiengang(caplog):
     empty_result   = {"documents": [[]], "distances": [[]]}
     general_result = {"documents": [["General KIT Info"]], "distances": [[0.3]]}
 
+    def side_effect(*args, **kwargs):
+        where = kwargs.get("where") or {}
+        if where.get("program") == "all":
+            return general_result
+        return empty_result
+
     with patch("app.rag.collection") as mock_coll:
-        # Erste Query = prog_docs (leer), zweite = all_docs (ein Treffer)
-        mock_coll.query.side_effect = [empty_result, general_result]
+        mock_coll.query.side_effect = side_effect
         with caplog.at_level(logging.WARNING):
             build_rag_context("Welche Pflichtmodule gibt es?", studiengang="wing_bsc")
 
