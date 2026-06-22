@@ -1,15 +1,14 @@
 import os
 import asyncio
-import json as json_lib
+import json
 import logging
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 
-from app.auth import check_auth
 from app.gemini import client, gemini_config, SSE_HEADERS
 from app.prompts import build_prompt
 from app.rag import build_rag_context
@@ -70,7 +69,7 @@ class TavusLLMRequest(BaseModel):
     studiengang: str | None = None
 
 
-@router.post("/tavus/settings", dependencies=[Depends(check_auth)])
+@router.post("/tavus/settings")
 async def tavus_settings(prefs: TavusPrefsRequest):
     """Aktualisiert Sprache/Studiengang für den laufenden Voice-Pfad."""
     active_voice_prefs["lang"] = prefs.lang
@@ -78,7 +77,7 @@ async def tavus_settings(prefs: TavusPrefsRequest):
     return {"status": "ok", **active_voice_prefs}
 
 
-@router.post("/tavus/session", dependencies=[Depends(check_auth)])
+@router.post("/tavus/session")
 async def tavus_session(prefs: TavusPrefsRequest | None = None):
     api_key = os.getenv("TAVUS_API_KEY")
     if not api_key:
@@ -119,7 +118,7 @@ async def tavus_session(prefs: TavusPrefsRequest | None = None):
             raise HTTPException(status_code=504, detail="Tavus API Timeout")
 
 
-@router.post("/tavus/end", dependencies=[Depends(check_auth)])
+@router.post("/tavus/end")
 async def tavus_end(request: TavusEndRequest):
     api_key = os.getenv("TAVUS_API_KEY", "")
     async with httpx.AsyncClient() as http:
@@ -134,7 +133,7 @@ async def tavus_end(request: TavusEndRequest):
     return {"status": "ended"}
 
 
-@router.post("/tavus/message", dependencies=[Depends(check_auth)])
+@router.post("/tavus/message")
 async def tavus_message(request: TavusMessageRequest):
     api_key = os.getenv("TAVUS_API_KEY")
     if not api_key:
@@ -173,7 +172,7 @@ async def tavus_llm(request: TavusLLMRequest):
 
     if not user_message:
         async def empty_stream():
-            yield f'data: {json_lib.dumps({"choices":[{"delta":{},"finish_reason":"stop"}]})}\n\n'
+            yield f'data: {json.dumps({"choices":[{"delta":{},"finish_reason":"stop"}]})}\n\n'
             yield 'data: [DONE]\n\n'
         return StreamingResponse(empty_stream(), media_type="text/event-stream", headers=SSE_HEADERS)
 
@@ -216,7 +215,7 @@ Frage: {user_message}"""
                 async for chunk in stream:
                     if chunk.text:
                         gesendet = True
-                        yield f'data: {json_lib.dumps({"choices": [{"delta": {"content": chunk.text}, "finish_reason": None}]})}\n\n'
+                        yield f'data: {json.dumps({"choices": [{"delta": {"content": chunk.text}, "finish_reason": None}]})}\n\n'
                 break
             except Exception as e:
                 logging.warning(f"tavus/llm Gemini Fehler (Versuch {versuch + 1}): {e}")
@@ -225,8 +224,8 @@ Frage: {user_message}"""
                 if versuch < 2:
                     await asyncio.sleep(VOICE_RETRY_DELAY)
         if not gesendet:
-            yield f'data: {json_lib.dumps({"choices": [{"delta": {"content": "Service momentan nicht verfügbar."}, "finish_reason": None}]})}\n\n'
-        yield f'data: {json_lib.dumps({"choices": [{"delta": {}, "finish_reason": "stop"}]})}\n\n'
+            yield f'data: {json.dumps({"choices": [{"delta": {"content": "Service momentan nicht verfügbar."}, "finish_reason": None}]})}\n\n'
+        yield f'data: {json.dumps({"choices": [{"delta": {}, "finish_reason": "stop"}]})}\n\n'
         yield 'data: [DONE]\n\n'
 
     return StreamingResponse(stream_answer(), media_type="text/event-stream", headers=SSE_HEADERS)
