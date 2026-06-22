@@ -125,3 +125,55 @@ def test_zweistufige_suche_kombiniert_und_rerankt(monkeypatch):
 
     # beste_distanz ist das Minimum der kombinierten Distanzen
     assert distanz == pytest.approx(min(prog_dists[0], all_dists[0]), abs=0.01)
+
+
+def test_zweistufig_fetches_8_prog_and_4_all(monkeypatch):
+    """Zweistufige Suche holt 8 Handbuch- + 4 allgemeine Kandidaten (Latenz)."""
+    mock_reranker = MagicMock()
+    mock_reranker.predict.side_effect = lambda pairs: [1.0 - i * 0.01 for i in range(len(pairs))]
+    monkeypatch.setattr(rag_module, "reranker", mock_reranker)
+
+    requested_n = {}
+
+    def fake_query(**kwargs):
+        where = kwargs.get("where", {})
+        n = kwargs["n_results"]
+        key = where.get("program")
+        requested_n[key] = n
+        docs = [f"{key}_{i}" for i in range(n)]
+        dists = [0.2 + i * 0.01 for i in range(n)]
+        return {"documents": [docs], "distances": [dists]}
+
+    mock_collection = MagicMock()
+    mock_collection.query.side_effect = lambda **kw: fake_query(**kw)
+    monkeypatch.setattr(rag_module, "collection", mock_collection)
+
+    rag_module.build_rag_context("Welche Module gibt es?", studiengang="winfo_bsc")
+
+    assert requested_n["winfo_bsc"] == 8
+    assert requested_n["all"] == 4
+
+
+def test_zweistufig_pflicht_fetches_12_prog(monkeypatch):
+    """Pflichtmodul-Frage holt 12 Handbuch-Kandidaten."""
+    mock_reranker = MagicMock()
+    mock_reranker.predict.side_effect = lambda pairs: [1.0 - i * 0.01 for i in range(len(pairs))]
+    monkeypatch.setattr(rag_module, "reranker", mock_reranker)
+
+    requested_n = {}
+
+    def fake_query(**kwargs):
+        where = kwargs.get("where", {})
+        n = kwargs["n_results"]
+        requested_n[where.get("program")] = n
+        docs = [f"d_{i}" for i in range(n)]
+        dists = [0.2 + i * 0.01 for i in range(n)]
+        return {"documents": [docs], "distances": [dists]}
+
+    mock_collection = MagicMock()
+    mock_collection.query.side_effect = lambda **kw: fake_query(**kw)
+    monkeypatch.setattr(rag_module, "collection", mock_collection)
+
+    rag_module.build_rag_context("Welche Pflichtmodule gibt es?", studiengang="wing_bsc")
+
+    assert requested_n["wing_bsc"] == 12
