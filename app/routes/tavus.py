@@ -14,6 +14,7 @@ from app.prompts import build_prompt
 from app.rag import build_rag_context
 
 router = APIRouter()
+_http = httpx.AsyncClient()
 
 VOICE_RETRY_DELAY = 2
 
