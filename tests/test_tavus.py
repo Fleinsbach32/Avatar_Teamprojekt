@@ -303,9 +303,11 @@ def test_tavus_llm_uses_voice_prefs(mock_client, mock_collection):
         "messages": [{"role": "user", "content": "Test"}],
         "stream": True
     })
-    # Studiengang-Filter aus den Prefs (nicht aus dem Request) angewendet
-    call_kwargs = mock_collection.query.call_args.kwargs
-    assert call_kwargs.get("where") == {"$or": [{"program": "winfo_bsc"}, {"program": "all"}]}
+    # Zweistufige RAG-Suche: zwei separate Queries statt einer $or-Query
+    all_calls = mock_collection.query.call_args_list
+    where_filters = [c.kwargs.get("where") for c in all_calls]
+    assert {"program": "winfo_bsc"} in where_filters
+    assert {"program": "all"} in where_filters
     # Englischer Voice-Prompt aus den Prefs
     prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
     assert "English" in prompt or "english" in prompt.lower()
