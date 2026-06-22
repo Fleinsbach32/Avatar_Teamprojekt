@@ -107,7 +107,10 @@ async def tavus_session(prefs: TavusPrefsRequest | None = None):
             timeout=15.0,
         )
         data = res.json()
-        logging.warning(f"Tavus API status: {res.status_code}, body: {data}")
+        if res.status_code in (200, 201):
+            logging.info(f"Tavus API status: {res.status_code}")
+        else:
+            logging.warning(f"Tavus API status: {res.status_code}, body: {data}")
         if res.status_code not in (200, 201):
             raise HTTPException(status_code=res.status_code, detail=str(data))
         return {
