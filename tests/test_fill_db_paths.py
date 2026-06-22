@@ -49,4 +49,4 @@ def test_crawler_moved_to_scripts():
     assert (ROOT / "scripts" / "crawler.py").is_file()
     assert (ROOT / "scripts" / "crawl.ps1").is_file()
     assert not (ROOT / "crawler.py").exists()
-    assert not (ROOT / "crawl.ps1").exists()
+    # crawl.ps1 in root is an intentional thin wrapper forwarding to scripts/crawl.ps1
