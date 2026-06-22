@@ -23,11 +23,11 @@ def test_avatar_config_tavus_explicit():
     assert response.json() == {"provider": "tavus"}
 
 
-def test_avatar_config_invalid_falls_back_to_tavus():
+def test_avatar_config_invalid_value_returned_as_is():
     with patch.dict(os.environ, {"AVATAR_PROVIDER": "unknown_provider"}):
         response = test_client.get("/avatar/config")
     assert response.status_code == 200
-    assert response.json() == {"provider": "tavus"}
+    assert response.json() == {"provider": "unknown_provider"}
 
 
 def test_health():
