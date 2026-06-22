@@ -1,7 +1,9 @@
+import logging
 import os
 import re
 import chromadb
 from chromadb.utils import embedding_functions
+from sentence_transformers import CrossEncoder
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
@@ -10,11 +12,17 @@ MODULE_ID_RE = re.compile(r'\b[MT]-[A-Z]+-\d+\b')
 embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="paraphrase-multilingual-MiniLM-L12-v2"
 )
-chroma_client = chromadb.PersistentClient(path="chroma_db")
+chroma_client = chromadb.PersistentClient(path="data/chroma_db")
 collection = chroma_client.get_or_create_collection(
     name="uni_beratung",
     embedding_function=embedding_fn,
 )
+
+try:
+    reranker = CrossEncoder("cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
+except Exception as e:
+    logging.warning(f"Reranker konnte nicht geladen werden: {e}")
+    reranker = None
 
 STUDIENGANG_FILES: dict[str, list[str]] = {
     # Bachelor
@@ -107,6 +115,19 @@ def _query_safe(where: dict | None, n_results: int, **kwargs) -> dict:
             return collection.query(**base)
         except Exception:
             return {"documents": [[]], "distances": [[]]}
+
+
+def rerank(docs: list[str], query: str, top_k: int = 6) -> list[str]:
+    """Rankt Dokumente mit CrossEncoder neu und gibt die top_k zurück.
+    Fallback auf einfaches Slicing wenn reranker nicht verfügbar."""
+    if not docs:
+        return docs
+    if reranker is None:
+        return docs[:top_k]
+    pairs = [(query, doc) for doc in docs]
+    scores = reranker.predict(pairs)
+    ranked = sorted(zip(scores, docs), key=lambda x: x[0], reverse=True)
+    return [doc for _, doc in ranked[:top_k]]
 
 
 def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, str, float]:
