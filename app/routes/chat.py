@@ -1,5 +1,5 @@
 import asyncio
-import json as json_lib
+import json
 import logging
 import time
 
@@ -24,20 +24,17 @@ class ChatRequest(BaseModel):
 
 @router.post("/chat")
 async def chat(request: ChatRequest):
-    session_id  = request.session_id
-    user_input  = request.message
-
-    touch_session(session_id)
-    if session_id not in sessions:
-        sessions[session_id] = []
-    chat_history = sessions[session_id]
+    touch_session(request.session_id)
+    if request.session_id not in sessions:
+        sessions[request.session_id] = []
+    chat_history = sessions[request.session_id]
 
     kontext, kontext_anweisung, beste_distanz = await asyncio.to_thread(
-        build_rag_context, user_input, request.studiengang
+        build_rag_context, request.message, request.studiengang
     )
     verlauf = "\n".join(f"{m['role']}: {m['content']}" for m in chat_history[-4:])
 
-    prompt = f"""{build_prompt("text", request.lang)}{opening_instruction(session_id)}
+    prompt = f"""{build_prompt("text", request.lang)}{opening_instruction(request.session_id)}
 
 {kontext_anweisung}
 
@@ -47,9 +44,7 @@ Kontext:
 Gesprächsverlauf:
 {verlauf}
 
-Frage: {user_input}"""
-
-    quelle = "Wissensbasis" if beste_distanz < 0.45 else "LLM"
+Frage: {request.message}"""
 
     async def event_stream():
         t1 = time.time()
@@ -63,25 +58,25 @@ Frage: {user_input}"""
             async for chunk in stream:
                 if chunk.text:
                     chat_parts.append(chunk.text)
-                    yield f'data: {json_lib.dumps({"type": "chunk", "text": chunk.text})}\n\n'
+                    yield f'data: {json.dumps({"type": "chunk", "text": chunk.text})}\n\n'
         except Exception as e:
             logging.warning(f"/chat Gemini Fehler: {e}")
-            yield f'data: {json_lib.dumps({"type": "error", "message": "Service momentan nicht verfügbar."})}\n\n'
+            yield f'data: {json.dumps({"type": "error", "message": "Service momentan nicht verfügbar."})}\n\n'
             return
 
         answer = "".join(chat_parts).strip()
-        remember_opening(session_id, answer)
+        remember_opening(request.session_id, answer)
 
-        sessions[session_id].append({"role": "Du", "content": user_input})
-        sessions[session_id].append({"role": "Bot", "content": answer})
+        sessions[request.session_id].append({"role": "Du", "content": request.message})
+        sessions[request.session_id].append({"role": "Bot", "content": answer})
 
         done_event = {
             "type": "done",
             "voice_text": answer,
-            "source": quelle,
+            "source": "Wissensbasis" if beste_distanz < 0.45 else "LLM",
             "latency_ms": round((time.time() - t1) * 1000),
-            "session_id": session_id,
+            "session_id": request.session_id,
         }
-        yield f'data: {json_lib.dumps(done_event)}\n\n'
+        yield f'data: {json.dumps(done_event)}\n\n'
 
     return StreamingResponse(event_stream(), media_type="text/event-stream", headers=SSE_HEADERS)

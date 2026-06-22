@@ -309,3 +309,9 @@ def test_chat_completions_alias(mock_client, mock_collection):
     assert response.status_code == 200
     assert "[DONE]" in response.text
     _reset_voice_prefs()
+
+
+def test_avatar_config_returns_tavus():
+    response = test_client.get("/avatar/config")
+    assert response.status_code == 200
+    assert response.json() == {"provider": "tavus"}
