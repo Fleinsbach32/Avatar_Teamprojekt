@@ -81,4 +81,4 @@ def test_standard_search_fetches_15_candidates_and_reranks(monkeypatch):
 
     # Kontext enthält maximal 6 Chunks
     chunk_count = kontext.count("\n\n") + 1 if kontext else 0
-    assert chunk_count <= 6
+    assert chunk_count == 6
