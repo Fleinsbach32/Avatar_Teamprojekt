@@ -12,7 +12,7 @@ from chromadb.utils import embedding_functions
 ef = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="paraphrase-multilingual-MiniLM-L12-v2"
 )
-client = chromadb.PersistentClient(path=str(PROJECT_ROOT / "data" / "chroma_db"))
+client = chromadb.PersistentClient(path=str(PROJECT_ROOT / "chroma_db"))
 col = client.get_collection("uni_beratung", embedding_function=ef)
 
 print(f"Gesamt: {col.count()} Eintraege\n")

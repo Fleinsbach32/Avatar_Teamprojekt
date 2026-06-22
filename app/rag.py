@@ -12,7 +12,7 @@ MODULE_ID_RE = re.compile(r'\b[MT]-[A-Z]+-\d+\b')
 embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="paraphrase-multilingual-MiniLM-L12-v2"
 )
-chroma_client = chromadb.PersistentClient(path="data/chroma_db")
+chroma_client = chromadb.PersistentClient(path="chroma_db")
 collection = chroma_client.get_or_create_collection(
     name="uni_beratung",
     embedding_function=embedding_fn,
@@ -61,10 +61,11 @@ _NUMBER_Q_RE = re.compile(
 )
 
 # Erkennt "Was ist das Modul X?" / "Erkläre das Modul X" / "Was macht Modul X?"
+# "Modul" ist optional — fängt auch "Was ist Introduction to Digital Economics?" ab.
 _WHAT_IS_MODULE_RE = re.compile(
     r'(?:was\s+(?:ist|sind|bedeutet|beinhaltet|umfasst)|erkl(?:ä|ae)re?\s+(?:mir\s+)?(?:kurz\s+)?|'
     r'beschreibe?\s+(?:mir\s+)?(?:kurz\s+)?|was\s+macht)\s+'
-    r'(?:(?:das|ein|die|dem|den)\s+)?(?:modul\s+)'
+    r'(?:(?:das|ein|die|dem|den)\s+)?(?:modul\s+)?'
     r'(.+?)[\?\.!]*\s*$',
     re.IGNORECASE,
 )
@@ -202,14 +203,18 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
             # Fester Distanzwert — Treffer via $contains ist immer aus der DB,
             # unabhängig von der semantischen Embedding-Distanz.
             return kontext, anweisung, 0.1
-        # Modul nicht gefunden → klare Aussage, kein Raten
-        return (
-            "",
-            "Das angefragte Modul ist nicht in der Wissensdatenbank. "
-            "Sage kurz und ehrlich, dass du dazu keine Informationen hast. "
-            "Schlage KEINE anderen Modulnamen vor. Empfehle campus.kit.edu.",
-            1.0,
-        )
+        # Modul nicht gefunden — nur wenn Studiengang gewählt klare "nicht vorhanden"-Aussage,
+        # sonst Standard-Semantiksuche (allgemeine Fragen wie "was ist ein NC?" sollen
+        # nicht als fehlende Module behandelt werden).
+        if studiengang and studiengang in STUDIENGANG_FILES:
+            return (
+                "",
+                "Das angefragte Modul ist nicht in der Wissensdatenbank für diesen Studiengang. "
+                "Sage kurz und ehrlich, dass du dazu keine Informationen hast. "
+                "Schlage KEINE anderen Modulnamen vor. Empfehle campus.kit.edu.",
+                1.0,
+            )
+        # Kein Studiengang → weiter zur Standard-Semantiksuche unten
 
     # Standardsuche — zweistufig wenn Studiengang gewählt, sonst einstufig.
     # Problem: "all"-getaggte Web-Chunks (54k) überdecken bei einstufiger Suche
