@@ -1,3 +1,4 @@
+import functools
 from typing import Literal
 
 KIRA_BASE_PROMPT = """Du bist KIRA, Studienberaterin am Karlsruher Institut für Technologie (KIT).
@@ -75,6 +76,7 @@ Questions unrelated to KIT: "I'm afraid that's outside my area, but happy to hel
 }
 
 
+@functools.lru_cache(maxsize=4)
 def build_prompt(mode: Literal["text", "voice"], lang: str = "de") -> str:
     ext_map = KIRA_TEXT_EXT if mode == "text" else KIRA_VOICE_EXT
     ext = ext_map.get(lang, ext_map["de"])
