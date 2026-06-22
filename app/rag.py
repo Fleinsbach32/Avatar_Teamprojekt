@@ -232,8 +232,8 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
         dists = (prog_dists + all_dists)[:limit]
         beste_distanz = min(dists) if dists else 1.0
     else:
-        results = _query_safe(where, 6, query_texts=[query])
-        docs  = results["documents"][0]
+        results = _query_safe(where, 15, query_texts=[query])
+        docs  = rerank(results["documents"][0], query, top_k=6)
         dists = results["distances"][0]
         beste_distanz = dists[0] if dists else 1.0
 

@@ -76,8 +76,10 @@ def test_build_rag_context_knowledge_base():
             "documents": [["Doku eins", "Doku zwei"]],
             "distances": [[0.2, 0.3]]
         }
-        from app.rag import build_rag_context
-        kontext, anweisung, distanz = build_rag_context("Testfrage")
+        with patch("app.rag.rerank") as mock_rerank:
+            mock_rerank.return_value = ["Doku eins", "Doku zwei"]
+            from app.rag import build_rag_context
+            kontext, anweisung, distanz = build_rag_context("Testfrage")
     assert "Doku eins" in kontext
     assert "Doku zwei" in kontext
     assert distanz == 0.2
@@ -100,8 +102,10 @@ def test_build_rag_context_truncates_docs_at_600():
             "documents": [["C" * 700]],
             "distances": [[0.2]]
         }
-        from app.rag import build_rag_context
-        kontext, _, _ = build_rag_context("Testfrage")
+        with patch("app.rag.rerank") as mock_rerank:
+            mock_rerank.return_value = ["C" * 700]
+            from app.rag import build_rag_context
+            kontext, _, _ = build_rag_context("Testfrage")
     assert "C" * 600 in kontext
     assert "C" * 601 not in kontext
 
@@ -111,8 +115,10 @@ def test_build_rag_context_studiengang_filter():
             "documents": [["WiInf Dokument"]],
             "distances": [[0.2]]
         }
-        from app.rag import build_rag_context
-        build_rag_context("Testfrage", studiengang="winfo_bsc")
+        with patch("app.rag.rerank") as mock_rerank:
+            mock_rerank.return_value = ["WiInf Dokument"]
+            from app.rag import build_rag_context
+            build_rag_context("Testfrage", studiengang="winfo_bsc")
     call_kwargs = mock_collection.query.call_args.kwargs
     assert call_kwargs["where"] == {"$or": [{"program": "winfo_bsc"}, {"program": "all"}]}
 
