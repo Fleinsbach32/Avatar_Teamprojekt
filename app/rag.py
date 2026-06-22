@@ -131,6 +131,49 @@ def rerank(docs: list[str], query: str, top_k: int = 6) -> list[str]:
     return [doc for _, doc in ranked[:top_k]]
 
 
+def _merge_handbook_priority(
+    prog_docs: list[str],
+    all_docs: list[str],
+    reranker_obj,
+    query: str,
+    top_k: int = 6,
+    min_handbook: int = 3,
+) -> list[str]:
+    """Kombiniert Handbuch- (prog_docs) und allgemeine Chunks (all_docs),
+    rankt sie neu und garantiert mindestens `min_handbook` Handbuch-Chunks im
+    Ergebnis (max. `top_k`). Verhindert, dass studiengangsspezifische Inhalte
+    vom Reranker durch generische Web-Chunks verdrängt werden.
+
+    Ohne Reranker: Handbuch zuerst, dann allgemein, auf top_k geschnitten.
+    """
+    combined = prog_docs + all_docs
+    if not combined:
+        return []
+
+    if reranker_obj is None:
+        ranked = combined
+    else:
+        pairs = [(query, doc) for doc in combined]
+        scores = reranker_obj.predict(pairs)
+        ranked = [doc for _, doc in sorted(zip(scores, combined), key=lambda x: x[0], reverse=True)]
+
+    prog_set = set(prog_docs)
+    final = ranked[:top_k]
+    handbook_in_final = [d for d in final if d in prog_set]
+    if len(handbook_in_final) >= min_handbook:
+        return final
+
+    needed = min_handbook - len(handbook_in_final)
+    extra_handbook = [d for d in ranked if d in prog_set and d not in final][:needed]
+    if not extra_handbook:
+        return final  # nicht genug Handbuch-Chunks vorhanden
+
+    non_handbook = [d for d in final if d not in prog_set]
+    drop = set(non_handbook[-len(extra_handbook):])
+    result = [d for d in final if d not in drop] + extra_handbook
+    return result[:top_k]
+
+
 def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, str, float]:
     where = _studiengang_where(studiengang)
 
@@ -231,13 +274,11 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
         all_r  = _query_safe({"program": "all"}, 4, query_texts=[query])
         all_docs  = all_r["documents"][0]
         all_dists = all_r["distances"][0]
-        # Kombinieren und via Cross-Encoder auf 6 reranken
-        combined_docs  = prog_docs + all_docs
+        # Kombinieren mit garantierter Handbuch-Priorität (max. 6 Chunks)
+        docs = _merge_handbook_priority(prog_docs, all_docs, reranker, query, top_k=6, min_handbook=3)
         combined_dists = prog_dists + all_dists
-        docs  = rerank(combined_docs, query, top_k=6)
-        dists = combined_dists
         # beste_distanz aus allen Kandidaten-Distanzen (Proxy für DB-Relevanz)
-        beste_distanz = min(dists) if dists else 1.0
+        beste_distanz = min(combined_dists) if combined_dists else 1.0
     else:
         results = _query_safe(where, 15, query_texts=[query])
         docs  = rerank(results["documents"][0], query, top_k=6)

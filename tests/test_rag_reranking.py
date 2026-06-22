@@ -177,3 +177,39 @@ def test_zweistufig_pflicht_fetches_12_prog(monkeypatch):
     rag_module.build_rag_context("Welche Pflichtmodule gibt es?", studiengang="wing_bsc")
 
     assert requested_n["wing_bsc"] == 12
+
+
+def test_merge_handbook_priority_forces_min_handbook():
+    """Auch wenn der Reranker alle 'all'-Chunks oben platziert, bleiben
+    mindestens 3 Handbuch-Chunks im finalen Kontext."""
+    prog_docs = [f"prog_{i}" for i in range(8)]
+    all_docs = [f"all_{i}" for i in range(4)]
+
+    class FakeReranker:
+        # platziert absichtlich alle all_* vor prog_* (niedrigster Score für prog_*)
+        def predict(self, pairs):
+            scores = []
+            for _q, doc in pairs:
+                scores.append(0.1 if doc.startswith("prog_") else 0.9)
+            return scores
+
+    result = rag_module._merge_handbook_priority(
+        prog_docs, all_docs, FakeReranker(), "frage", top_k=6, min_handbook=3
+    )
+
+    assert len(result) == 6
+    handbook = [d for d in result if d.startswith("prog_")]
+    assert len(handbook) >= 3
+
+
+def test_merge_handbook_priority_no_reranker_keeps_order():
+    """Ohne Reranker: Handbuch zuerst, dann allgemein, auf top_k geschnitten."""
+    prog_docs = ["prog_0", "prog_1", "prog_2", "prog_3"]
+    all_docs = ["all_0", "all_1"]
+
+    result = rag_module._merge_handbook_priority(
+        prog_docs, all_docs, None, "frage", top_k=6, min_handbook=3
+    )
+
+    assert result[:4] == prog_docs
+    assert "all_0" in result and "all_1" in result
