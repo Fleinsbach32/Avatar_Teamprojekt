@@ -31,9 +31,17 @@ async def chat(request: ChatRequest):
         sessions[request.session_id] = []
     chat_history = sessions[request.session_id]
 
-    kontext, kontext_anweisung, beste_distanz = await asyncio.to_thread(
-        build_rag_context, request.message, request.studiengang
-    )
+    try:
+        kontext, kontext_anweisung, beste_distanz = await asyncio.to_thread(
+            build_rag_context, request.message, request.studiengang
+        )
+    except Exception as e:
+        logging.error(f"/chat RAG Fehler: {e}")
+
+        async def rag_error_stream():
+            yield f'data: {json.dumps({"type": "error", "message": "Wissensdatenbank momentan nicht verfügbar."})}\n\n'
+
+        return StreamingResponse(rag_error_stream(), media_type="text/event-stream", headers=SSE_HEADERS)
     verlauf = "\n".join(f"{m['role']}: {m['content']}" for m in chat_history[-4:])
 
     prompt = f"""{build_prompt("text", request.lang)}{opening_instruction(request.session_id)}

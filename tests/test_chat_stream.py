@@ -249,3 +249,13 @@ def test_chat_context_limit_600(mock_client, mock_collection):
     prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
     assert "B" * 600 in prompt
     assert "B" * 601 not in prompt
+
+
+@patch("app.routes.chat.build_rag_context", side_effect=RuntimeError("ChromaDB crash"))
+def test_chat_rag_exception_returns_sse_error(mock_rag):
+    response = test_client.post("/chat", json={"message": "Test", "session_id": "s_rag_crash"})
+    # Muss 200 OK mit SSE-Body sein, nicht HTTP 500
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers.get("content-type", "")
+    events = sse_events(response.text)
+    assert any(e.get("type") == "error" for e in events)
