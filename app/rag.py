@@ -94,11 +94,13 @@ def _module_name_from_what_is_question(query: str) -> str | None:
 def _contains_variants(name: str) -> list[str]:
     """Erzeugt Schreibvarianten für where_document $contains (Case-Varianten
     + erster Bestandteil als Fallback bei mehrteiligen Namen)."""
-    variants = [name, name.title(), name.capitalize()]
+    variants = [name, name.title(), name.capitalize(), name.lower()]
     words = name.split()
-    if len(words) > 1 and len(words[0]) >= 4:
-        variants.append(words[0])
-        variants.append(words[0].title())
+    if len(words) > 1:
+        for w in words:
+            if len(w) >= 4:
+                variants.extend([w, w.title(), w.lower()])
+                break
     return list(dict.fromkeys(v for v in variants if v))
 
 
@@ -235,6 +237,10 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
                                        where_document={"$contains": variant})
             if what_results["documents"][0]:
                 break
+        logging.info(
+            f"[RAG] was_ist='{what_is_name}': contains-Treffer="
+            f"{len(what_results['documents'][0])} (where={where})"
+        )
         if what_results["documents"][0]:
             kontext = "\n\n".join(doc[:600] for doc in what_results["documents"][0])
             anweisung = (
@@ -269,6 +275,11 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
         # Stufe 1: Handbuch des gewählten Studiengangs (Priorität)
         prog_r = _query_safe({"program": studiengang}, prog_n, query_texts=[query])
         prog_docs  = prog_r["documents"][0]
+        if not prog_docs:
+            logging.warning(
+                f"[RAG] Keine Handbuch-Chunks für studiengang={studiengang!r} gefunden "
+                f"— Filter greift möglicherweise nicht."
+            )
         prog_dists = prog_r["distances"][0]
         # Stufe 2: allgemeiner Inhalt (FAQ, Info, Web)
         all_r  = _query_safe({"program": "all"}, 4, query_texts=[query])
@@ -279,6 +290,10 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
         combined_dists = prog_dists + all_dists
         # beste_distanz aus allen Kandidaten-Distanzen (Proxy für DB-Relevanz)
         beste_distanz = min(combined_dists) if combined_dists else 1.0
+        logging.info(
+            f"[RAG] SG={studiengang}: prog={len(prog_docs)} handbuch, all={len(all_docs)} general"
+            f" → final={len(docs)} chunks"
+        )
     else:
         results = _query_safe(where, 15, query_texts=[query])
         docs  = rerank(results["documents"][0], query, top_k=6)

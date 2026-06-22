@@ -213,3 +213,36 @@ def test_merge_handbook_priority_no_reranker_keeps_order():
 
     assert result[:4] == prog_docs
     assert "all_0" in result and "all_1" in result
+
+
+# ── _contains_variants: Erweiterung ──────────────────────────────────────────
+
+def test_contains_variants_includes_full_lowercase():
+    from app.rag import _contains_variants
+    variants = _contains_variants("Introduction to Digital Economics")
+    assert "introduction to digital economics" in variants
+
+
+def test_contains_variants_first_word_lowercase_fallback():
+    from app.rag import _contains_variants
+    variants = _contains_variants("Introduction to Digital Economics")
+    assert "introduction" in variants
+
+
+# ── RAG: Warning bei leerem prog_docs ────────────────────────────────────────
+
+def test_rag_warns_when_no_handbook_chunks_for_studiengang(caplog):
+    import logging
+    from unittest.mock import patch
+    from app.rag import build_rag_context
+
+    empty_result   = {"documents": [[]], "distances": [[]]}
+    general_result = {"documents": [["General KIT Info"]], "distances": [[0.3]]}
+
+    with patch("app.rag.collection") as mock_coll:
+        # Erste Query = prog_docs (leer), zweite = all_docs (ein Treffer)
+        mock_coll.query.side_effect = [empty_result, general_result]
+        with caplog.at_level(logging.WARNING):
+            build_rag_context("Welche Pflichtmodule gibt es?", studiengang="wing_bsc")
+
+    assert any("Keine Handbuch-Chunks" in r.message for r in caplog.records)
