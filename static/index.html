@@ -616,7 +616,12 @@ body {
         <option value="digieco_msc">DigiEco (M.Sc.)</option>
       </optgroup>
     </select>
-    <button id="langToggle" onclick="toggleLang()" style="background:none; border:1px solid var(--border); border-radius:6px; padding:3px 10px; font-size:12px; cursor:pointer; color:var(--text-muted); font-family:var(--font); margin-right:8px; display:flex; align-items:center; gap:6px;"></button>
+    <div id="langSwitch" style="display:flex; align-items:center; gap:4px; margin-right:8px;">
+      <button type="button" id="langDe" onclick="setLang('de')" title="Deutsch"
+        style="background:none; border:1px solid var(--border); border-radius:6px; padding:3px 8px; cursor:pointer; display:flex; align-items:center; gap:4px; font-size:12px; font-family:var(--font);"></button>
+      <button type="button" id="langEn" onclick="setLang('en')" title="English"
+        style="background:none; border:1px solid var(--border); border-radius:6px; padding:3px 8px; cursor:pointer; display:flex; align-items:center; gap:4px; font-size:12px; font-family:var(--font);"></button>
+    </div>
     <div class="status-dot offline" id="statusDot"></div>
     <span class="status-text" id="statusText">verbinde...</span>
   </div>
@@ -814,15 +819,25 @@ body {
     en: '<svg width="20" height="14" viewBox="0 0 60 30" style="border-radius:2px;display:block"><clipPath id="ukclip"><rect width="60" height="30"/></clipPath><g clip-path="url(#ukclip)"><rect width="60" height="30" fill="#012169"/><path d="M0,0 60,30 M60,0 0,30" stroke="#fff" stroke-width="6"/><path d="M0,0 60,30 M60,0 0,30" stroke="#C8102E" stroke-width="4"/><path d="M30,0 V30 M0,15 H60" stroke="#fff" stroke-width="10"/><path d="M30,0 V30 M0,15 H60" stroke="#C8102E" stroke-width="6"/></g></svg>'
   };
 
-  // Button zeigt die Zielsprache (zu der gewechselt würde) samt Flagge.
-  function setLangButton() {
-    const target = lang === "de" ? "en" : "de";
-    document.getElementById("langToggle").innerHTML = FLAG_SVG[target] + "<span>" + target.toUpperCase() + "</span>";
+  // Markiert die aktive Sprache; beide Flaggen bleiben sichtbar.
+  function setLangButtons() {
+    const deBtn = document.getElementById("langDe");
+    const enBtn = document.getElementById("langEn");
+    deBtn.innerHTML = FLAG_SVG.de + "<span>DE</span>";
+    enBtn.innerHTML = FLAG_SVG.en + "<span>EN</span>";
+    deBtn.style.opacity = lang === "de" ? "1" : "0.5";
+    enBtn.style.opacity = lang === "en" ? "1" : "0.5";
+    deBtn.style.borderColor = lang === "de" ? "var(--kit-green, #009682)" : "var(--border)";
+    enBtn.style.borderColor = lang === "en" ? "var(--kit-green, #009682)" : "var(--border)";
+    deBtn.style.color = lang === "de" ? "var(--text)" : "var(--text-muted)";
+    enBtn.style.color = lang === "en" ? "var(--text)" : "var(--text-muted)";
   }
 
-  function toggleLang() {
-    lang = lang === "de" ? "en" : "de";
-    setLangButton();
+  // Setzt die Sprache direkt (Klick auf die jeweilige Flagge).
+  function setLang(target) {
+    if (target === lang) return;
+    lang = target;
+    setLangButtons();
     applyLang();
     pushVoicePrefs();
   }
@@ -1419,7 +1434,7 @@ body {
   syncSpeakerIcon();
 
   // ── Initiale Sprache anwenden ─────────────────────────
-  setLangButton();
+  setLangButtons();
   applyLang();
 </script>
 </body>
