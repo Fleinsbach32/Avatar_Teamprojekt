@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 
 load_dotenv()
 
-from app.rag import collection
+from app.rag import collection, reranker
 from app.routes import avatar, chat, tavus
 
 
@@ -18,6 +18,11 @@ async def lifespan(app: FastAPI):
         collection.query(query_texts=["Warmup"], n_results=1)
     except Exception as e:
         logging.warning(f"ChromaDB Warmup fehlgeschlagen: {e}")
+    if reranker is not None:
+        try:
+            reranker.predict([("Warmup", "Warmup")])
+        except Exception as e:
+            logging.warning(f"Reranker Warmup fehlgeschlagen: {e}")
     yield
     await tavus._http.aclose()
 
