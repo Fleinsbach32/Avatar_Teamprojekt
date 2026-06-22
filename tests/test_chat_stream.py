@@ -85,6 +85,7 @@ def test_chat_single_call_with_context(mock_client, mock_collection):
     assert mock_collection.query.call_count == 1
 
 
+@patch("app.routes.chat.CHAT_RETRY_DELAY", 0)
 @patch("app.rag.collection")
 @patch("app.routes.chat.client")
 def test_chat_error_event_on_stream_failure(mock_client, mock_collection):
@@ -96,6 +97,23 @@ def test_chat_error_event_on_stream_failure(mock_client, mock_collection):
     events = sse_events(response.text)
     assert any(e["type"] == "error" for e in events)
     assert not any(e["type"] == "done" for e in events)
+    assert mock_client.aio.models.generate_content_stream.call_count == 3
+
+
+@patch("app.routes.chat.CHAT_RETRY_DELAY", 0)
+@patch("app.rag.collection")
+@patch("app.routes.chat.client")
+def test_chat_retries_then_succeeds(mock_client, mock_collection):
+    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        side_effect=[RuntimeError("boom"), make_async_stream(["Erfolg."])]
+    )
+
+    response = test_client.post("/chat", json={"message": "Test", "session_id": "s_retry"})
+
+    events = sse_events(response.text)
+    assert any(e["type"] == "done" for e in events)
+    assert mock_client.aio.models.generate_content_stream.call_count == 2
 
 
 @patch("app.rag.collection")

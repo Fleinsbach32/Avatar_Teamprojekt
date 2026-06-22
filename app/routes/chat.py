@@ -14,6 +14,8 @@ from app.session import sessions, touch_session, remember_opening, opening_instr
 
 router = APIRouter()
 
+CHAT_RETRY_DELAY = 2
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -49,18 +51,31 @@ Frage: {request.message}"""
     async def event_stream():
         t1 = time.time()
         chat_parts = []
-        try:
-            stream = await client.aio.models.generate_content_stream(
-                model="gemini-2.5-flash",
-                contents=prompt,
-                config=gemini_config(400),
-            )
-            async for chunk in stream:
-                if chunk.text:
-                    chat_parts.append(chunk.text)
-                    yield f'data: {json.dumps({"type": "chunk", "text": chunk.text})}\n\n'
-        except Exception as e:
-            logging.warning(f"/chat Gemini Fehler: {e}")
+        gesendet = False
+        fehler = False
+        for versuch in range(3):
+            fehler = False
+            try:
+                stream = await client.aio.models.generate_content_stream(
+                    model="gemini-2.5-flash",
+                    contents=prompt,
+                    config=gemini_config(400),
+                )
+                async for chunk in stream:
+                    if chunk.text:
+                        gesendet = True
+                        chat_parts.append(chunk.text)
+                        yield f'data: {json.dumps({"type": "chunk", "text": chunk.text})}\n\n'
+                break
+            except Exception as e:
+                logging.warning(f"/chat Gemini Fehler (Versuch {versuch + 1}): {e}")
+                fehler = True
+                if gesendet:
+                    break  # mitten im Stream → kein Retry
+                if versuch < 2:
+                    await asyncio.sleep(CHAT_RETRY_DELAY)
+
+        if fehler:
             yield f'data: {json.dumps({"type": "error", "message": "Service momentan nicht verfügbar."})}\n\n'
             return
 
