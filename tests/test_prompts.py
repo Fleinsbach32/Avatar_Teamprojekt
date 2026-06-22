@@ -117,10 +117,16 @@ def test_build_rag_context_studiengang_filter():
             "documents": [["WiInf Dokument"]],
             "distances": [[0.2]]
         }
-        from app.rag import build_rag_context
-        build_rag_context("Testfrage", studiengang="winfo_bsc")
-    call_kwargs = mock_collection.query.call_args.kwargs
-    assert call_kwargs["where"] == {"$or": [{"program": "winfo_bsc"}, {"program": "all"}]}
+        with patch("app.rag.rerank") as mock_rerank:
+            mock_rerank.return_value = ["WiInf Dokument"]
+            from app.rag import build_rag_context
+            build_rag_context("Testfrage", studiengang="winfo_bsc")
+    # Stufe 1: Studiengangs-spezifische Dokumente
+    call1_kwargs = mock_collection.query.call_args_list[0].kwargs
+    assert call1_kwargs["where"] == {"program": "winfo_bsc"}
+    # Stufe 2: allgemeine Dokumente
+    call2_kwargs = mock_collection.query.call_args_list[1].kwargs
+    assert call2_kwargs["where"] == {"program": "all"}
 
 def test_build_rag_context_no_studiengang_no_filter():
     with patch("app.rag.collection") as mock_collection:
@@ -155,10 +161,14 @@ def test_module_id_regex_matches_m_and_t():
 def test_build_rag_context_studiengang_or_filter():
     with patch("app.rag.collection") as mock_collection:
         mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.2]]}
-        from app.rag import build_rag_context
-        build_rag_context("Testfrage", studiengang="winfo_bsc")
-    where = mock_collection.query.call_args.kwargs.get("where")
-    assert where == {"$or": [{"program": "winfo_bsc"}, {"program": "all"}]}
+        with patch("app.rag.rerank") as mock_rerank:
+            mock_rerank.return_value = ["Doc"]
+            from app.rag import build_rag_context
+            build_rag_context("Testfrage", studiengang="winfo_bsc")
+    # Stufe 1: Studiengangs-spezifische Dokumente
+    assert mock_collection.query.call_args_list[0].kwargs.get("where") == {"program": "winfo_bsc"}
+    # Stufe 2: allgemeine Dokumente
+    assert mock_collection.query.call_args_list[1].kwargs.get("where") == {"program": "all"}
 
 
 def test_build_rag_context_module_id_exact_lookup():

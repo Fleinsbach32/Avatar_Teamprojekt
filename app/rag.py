@@ -231,6 +231,7 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
         combined_dists = prog_dists + all_dists
         docs  = rerank(combined_docs, query, top_k=6)
         dists = combined_dists
+        # beste_distanz aus allen Kandidaten-Distanzen (Proxy für DB-Relevanz)
         beste_distanz = min(dists) if dists else 1.0
     else:
         results = _query_safe(where, 15, query_texts=[query])
