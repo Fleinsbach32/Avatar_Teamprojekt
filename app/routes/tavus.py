@@ -99,38 +99,36 @@ async def tavus_session(prefs: TavusPrefsRequest | None = None):
     if persona_id:
         body["persona_id"] = persona_id
 
-    async with httpx.AsyncClient() as http:
-        try:
-            res = await http.post(
-                "https://tavusapi.com/v2/conversations",
-                headers={"x-api-key": api_key, "Content-Type": "application/json"},
-                json=body,
-                timeout=15.0,
-            )
-            data = res.json()
-            logging.warning(f"Tavus API status: {res.status_code}, body: {data}")
-            if res.status_code not in (200, 201):
-                raise HTTPException(status_code=res.status_code, detail=str(data))
-            return {
-                "conversation_id": data["conversation_id"],
-                "conversation_url": data["conversation_url"],
-            }
-        except httpx.TimeoutException:
-            raise HTTPException(status_code=504, detail="Tavus API Timeout")
+    try:
+        res = await _http.post(
+            "https://tavusapi.com/v2/conversations",
+            headers={"x-api-key": api_key, "Content-Type": "application/json"},
+            json=body,
+            timeout=15.0,
+        )
+        data = res.json()
+        logging.warning(f"Tavus API status: {res.status_code}, body: {data}")
+        if res.status_code not in (200, 201):
+            raise HTTPException(status_code=res.status_code, detail=str(data))
+        return {
+            "conversation_id": data["conversation_id"],
+            "conversation_url": data["conversation_url"],
+        }
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Tavus API Timeout")
 
 
 @router.post("/tavus/end")
 async def tavus_end(request: TavusEndRequest):
     api_key = os.getenv("TAVUS_API_KEY", "")
-    async with httpx.AsyncClient() as http:
-        try:
-            await http.delete(
-                f"https://tavusapi.com/v2/conversations/{request.conversation_id}",
-                headers={"x-api-key": api_key},
-                timeout=10.0,
-            )
-        except httpx.TimeoutException:
-            pass
+    try:
+        await _http.delete(
+            f"https://tavusapi.com/v2/conversations/{request.conversation_id}",
+            headers={"x-api-key": api_key},
+            timeout=10.0,
+        )
+    except httpx.TimeoutException:
+        pass
     return {"status": "ended"}
 
 
@@ -140,23 +138,22 @@ async def tavus_message(request: TavusMessageRequest):
     if not api_key:
         raise HTTPException(status_code=500, detail="TAVUS_API_KEY nicht gesetzt")
 
-    async with httpx.AsyncClient() as http:
-        try:
-            res = await http.post(
-                f"https://tavusapi.com/v2/conversations/{quote(request.conversation_id, safe='')}/message",
-                headers={"x-api-key": api_key, "Content-Type": "application/json"},
-                json={"message": request.message},
-                timeout=15.0,
-            )
-            if res.status_code not in (200, 201):
-                try:
-                    detail = str(res.json())
-                except Exception:
-                    detail = res.text or f"HTTP {res.status_code}"
-                raise HTTPException(status_code=res.status_code, detail=detail)
-            return {"status": "sent"}
-        except httpx.TimeoutException:
-            raise HTTPException(status_code=504, detail="Tavus API Timeout")
+    try:
+        res = await _http.post(
+            f"https://tavusapi.com/v2/conversations/{quote(request.conversation_id, safe='')}/message",
+            headers={"x-api-key": api_key, "Content-Type": "application/json"},
+            json={"message": request.message},
+            timeout=15.0,
+        )
+        if res.status_code not in (200, 201):
+            try:
+                detail = str(res.json())
+            except Exception:
+                detail = res.text or f"HTTP {res.status_code}"
+            raise HTTPException(status_code=res.status_code, detail=detail)
+        return {"status": "sent"}
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Tavus API Timeout")
 
 
 # Tavus' OpenAI-kompatibler Client hängt "/chat/completions" an die im Dashboard

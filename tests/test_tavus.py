@@ -36,23 +36,18 @@ def make_failing_stream(texts, exc):
     return gen()
 
 
-@patch("app.routes.tavus.httpx.AsyncClient")
-def test_tavus_session_success(mock_httpx_class):
-    mock_http = AsyncMock()
-    mock_http.post.return_value = make_mock_response(200, {
+@patch("app.routes.tavus._http")
+def test_tavus_session_success(mock_http):
+    mock_http.post = AsyncMock(return_value=make_mock_response(200, {
         "conversation_id": "conv_abc123",
         "conversation_url": "https://tavus.daily.co/abc123"
-    })
-    mock_httpx_class.return_value.__aenter__ = AsyncMock(return_value=mock_http)
-    mock_httpx_class.return_value.__aexit__ = AsyncMock(return_value=False)
-
+    }))
     with patch.dict(os.environ, {
         "TAVUS_API_KEY": "real-key",
         "TAVUS_REPLICA_ID": "replica_xyz",
         "TAVUS_PERSONA_ID": ""
     }):
         response = test_client.post("/tavus/session")
-
     assert response.status_code == 200
     data = response.json()
     assert data["conversation_id"] == "conv_abc123"
@@ -69,34 +64,25 @@ def test_tavus_session_missing_api_key():
     assert response.status_code == 500
 
 
-@patch("app.routes.tavus.httpx.AsyncClient")
-def test_tavus_session_api_error(mock_httpx_class):
-    mock_http = AsyncMock()
-    mock_http.post.return_value = make_mock_response(401, {"error": "unauthorized"})
-    mock_httpx_class.return_value.__aenter__ = AsyncMock(return_value=mock_http)
-    mock_httpx_class.return_value.__aexit__ = AsyncMock(return_value=False)
+@patch("app.routes.tavus._http")
+def test_tavus_session_api_error(mock_http):
+    mock_http.post = AsyncMock(return_value=make_mock_response(401, {"error": "unauthorized"}))
     with patch.dict(os.environ, {"TAVUS_API_KEY": "bad-key"}):
         response = test_client.post("/tavus/session")
     assert response.status_code == 401
 
 
-@patch("app.routes.tavus.httpx.AsyncClient")
-def test_tavus_session_timeout(mock_httpx_class):
+@patch("app.routes.tavus._http")
+def test_tavus_session_timeout(mock_http):
     import httpx as real_httpx
-    mock_http = AsyncMock()
-    mock_http.post.side_effect = real_httpx.TimeoutException("timeout")
-    mock_httpx_class.return_value.__aenter__ = AsyncMock(return_value=mock_http)
-    mock_httpx_class.return_value.__aexit__ = AsyncMock(return_value=False)
+    mock_http.post = AsyncMock(side_effect=real_httpx.TimeoutException("timeout"))
     response = test_client.post("/tavus/session")
     assert response.status_code == 504
 
 
-@patch("app.routes.tavus.httpx.AsyncClient")
-def test_tavus_end_success(mock_httpx_class):
-    mock_http = AsyncMock()
-    mock_http.delete.return_value = make_mock_response(200, {})
-    mock_httpx_class.return_value.__aenter__ = AsyncMock(return_value=mock_http)
-    mock_httpx_class.return_value.__aexit__ = AsyncMock(return_value=False)
+@patch("app.routes.tavus._http")
+def test_tavus_end_success(mock_http):
+    mock_http.delete = AsyncMock(return_value=make_mock_response(200, {}))
     response = test_client.post("/tavus/end", json={"conversation_id": "conv_abc123"})
     assert response.status_code == 200
     assert response.json() == {"status": "ended"}
@@ -189,12 +175,9 @@ def test_tavus_llm_no_retry_after_first_chunk(mock_client, mock_collection):
     assert "[DONE]" in response.text
 
 
-@patch("app.routes.tavus.httpx.AsyncClient")
-def test_tavus_message_success(mock_httpx_class):
-    mock_http = AsyncMock()
-    mock_http.post.return_value = make_mock_response(200, {})
-    mock_httpx_class.return_value.__aenter__ = AsyncMock(return_value=mock_http)
-    mock_httpx_class.return_value.__aexit__ = AsyncMock(return_value=False)
+@patch("app.routes.tavus._http")
+def test_tavus_message_success(mock_http):
+    mock_http.post = AsyncMock(return_value=make_mock_response(200, {}))
     with patch.dict(os.environ, {"TAVUS_API_KEY": "real-key"}):
         response = test_client.post("/tavus/message", json={
             "conversation_id": "conv_abc123",
@@ -224,13 +207,10 @@ def test_tavus_message_missing_api_key():
     assert response.status_code == 500
 
 
-@patch("app.routes.tavus.httpx.AsyncClient")
-def test_tavus_message_timeout(mock_httpx_class):
+@patch("app.routes.tavus._http")
+def test_tavus_message_timeout(mock_http):
     import httpx as real_httpx
-    mock_http = AsyncMock()
-    mock_http.post.side_effect = real_httpx.TimeoutException("timeout")
-    mock_httpx_class.return_value.__aenter__ = AsyncMock(return_value=mock_http)
-    mock_httpx_class.return_value.__aexit__ = AsyncMock(return_value=False)
+    mock_http.post = AsyncMock(side_effect=real_httpx.TimeoutException("timeout"))
     response = test_client.post("/tavus/message", json={
         "conversation_id": "conv_abc123",
         "message": "Hallo"
