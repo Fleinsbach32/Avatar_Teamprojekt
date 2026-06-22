@@ -225,3 +225,15 @@ def test_prompt_module_number_only_on_request():
         p = build_prompt(mode, "de")
         assert "wenn ausdrücklich danach gefragt" in p
         assert "komplett weg" not in p
+
+
+def test_prompts_have_empathy_marker_de():
+    for mode in ("text", "voice"):
+        p = build_prompt(mode, "de").lower()
+        assert "ermutig" in p, f"DE {mode}-Prompt sollte ermutigenden Ton enthalten"
+
+
+def test_prompts_have_empathy_marker_en():
+    for mode in ("text", "voice"):
+        p = build_prompt(mode, "en").lower()
+        assert "encourag" in p, f"EN {mode}-Prompt sollte ermutigenden Ton enthalten"
