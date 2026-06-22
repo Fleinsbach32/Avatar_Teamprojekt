@@ -11,7 +11,7 @@ from chromadb.utils import embedding_functions
 # damit das Skript unabhängig vom Arbeitsverzeichnis läuft.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-CHROMA_PATH = str(PROJECT_ROOT / "data" / "chroma_db")
+CHROMA_PATH = str(PROJECT_ROOT / "chroma_db")
 CRAWLED_DATA_FOLDER = PROJECT_ROOT / "crawled_data"
 FAQ_FILES = [
     (PROJECT_ROOT / "data" / "faq_de.json",  "de"),
