@@ -411,26 +411,6 @@ body {
 
 .input-row { display: flex; gap: 8px; align-items: flex-end; }
 
-.tts-btn {
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--text-muted);
-  transition: all 0.2s;
-}
-
-.tts-btn.active {
-  background: #fef2f2;
-  border-color: #ef4444;
-  color: #ef4444;
-}
-
 #userInput {
   flex: 1;
   background: var(--bg);
@@ -564,8 +544,6 @@ body {
 #userInput::placeholder { color: rgba(255,255,255,0.40); }
 #userInput:focus { border-color: var(--kit-green); }
 .hint { color: rgba(255,255,255,0.40); }
-.tts-btn { border-color: rgba(255,255,255,0.15); background: rgba(0,0,0,0.40); color: rgba(255,255,255,0.70); }
-.tts-btn.active { background: rgba(239,68,68,0.30); border-color: rgba(239,68,68,0.60); }
 
 /* ── Toolbar: zentrierte transparente Pille ─────────── */
 .avatar-toolbar {
@@ -669,11 +647,6 @@ body {
 
   <div class="input-area">
     <div class="input-row">
-      <button class="tts-btn" id="ttsBtn" title="Spracheingabe (Chrome/Edge)">
-        <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V22h-3v2h8v-2h-3v-1.06A9 9 0 0 0 21 12v-2h-2z"/>
-        </svg>
-      </button>
       <textarea id="userInput" placeholder="Ihre Frage an KIRA..." rows="1"></textarea>
       <button id="sendBtn" onclick="sendMessage()">
         <svg viewBox="0 0 24 24" width="18" height="18"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="white"/></svg>
@@ -810,7 +783,6 @@ body {
     }
     const emptyP = document.querySelector(".empty-state p");
     if (emptyP) emptyP.innerHTML = t.emptyStateText;
-    if (recognition) recognition.lang = lang === "en" ? "en-US" : "de-DE";
   }
 
   // Inline-SVG-Flaggen (Emoji-Flaggen werden unter Windows nicht gerendert).
@@ -910,7 +882,6 @@ body {
     idleFired = false;
   }
 
-  const ttsBtn      = document.getElementById("ttsBtn");
   const avatarVideo  = document.getElementById("avatarVideo");
   let tavusCall = null;
   let tavusConversationId = null;
@@ -932,42 +903,6 @@ body {
   const avatarLabel = document.getElementById("avatarLabel");
   const startBtn    = document.getElementById("startBtn");
 
-  let recognition = null;
-
-  if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
-    ttsBtn.disabled = true;
-    ttsBtn.title = "Spracheingabe nur in Chrome/Edge verfügbar";
-  } else {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SpeechRecognition();
-    recognition.lang = "de-DE";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      document.getElementById("userInput").value = transcript;
-      sendMessage();
-    };
-
-    recognition.onerror = (event) => {
-      console.warn("Spracherkennung:", event.error);
-      ttsBtn.classList.remove("active");
-    };
-
-    recognition.onend = () => {
-      ttsBtn.classList.remove("active");
-    };
-
-    ttsBtn.addEventListener("click", () => {
-      if (ttsBtn.classList.contains("active")) {
-        recognition.stop();
-      } else {
-        recognition.start();
-        ttsBtn.classList.add("active");
-      }
-    });
-  }
 
   // Health Check
   fetch("/health")
@@ -1134,7 +1069,6 @@ body {
   }
 
   async function avatarSpeak(text) {
-    if (recognition) recognition.stop();
     // Tavus spricht automatisch über CVI – kein manueller Aufruf nötig
   }
 
