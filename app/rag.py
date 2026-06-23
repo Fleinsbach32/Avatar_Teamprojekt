@@ -14,7 +14,11 @@ MODULE_ID_RE = re.compile(r'\b[MT]-[A-Z]+-\d+\b')
 embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="paraphrase-multilingual-MiniLM-L12-v2"
 )
-chroma_client = chromadb.PersistentClient(path="chroma_db")
+from app.bootstrap import ensure_chroma_db
+
+CHROMA_DB_DIR = os.getenv("CHROMA_DB_DIR", "chroma_db")
+ensure_chroma_db(CHROMA_DB_DIR)
+chroma_client = chromadb.PersistentClient(path=CHROMA_DB_DIR)
 collection = chroma_client.get_or_create_collection(
     name="uni_beratung",
     embedding_function=embedding_fn,
