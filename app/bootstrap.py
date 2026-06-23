@@ -31,6 +31,7 @@ def ensure_chroma_db(db_dir: str) -> None:
 
     tmp_dir = tempfile.mkdtemp(prefix="chroma_download_")
     tmp_extract = db_dir + ".tmp"
+    shutil.rmtree(tmp_extract, ignore_errors=True)  # evict stale .tmp from prior crash
     try:
         url = f"https://drive.google.com/uc?id={file_id}"
         tmp_archive = os.path.join(tmp_dir, "chroma_archive")
@@ -42,7 +43,7 @@ def ensure_chroma_db(db_dir: str) -> None:
 
         if tarfile.is_tarfile(out):
             with tarfile.open(out) as tf:
-                tf.extractall(tmp_extract)
+                tf.extractall(tmp_extract, filter="data")
         elif zipfile.is_zipfile(out):
             with zipfile.ZipFile(out) as zf:
                 zf.extractall(tmp_extract)
@@ -51,6 +52,8 @@ def ensure_chroma_db(db_dir: str) -> None:
 
         # Archiv gepackt als chroma_db/ → inneres Verzeichnis hochziehen
         entries = os.listdir(tmp_extract)
+        if not entries:
+            raise RuntimeError("Archiv ist leer — keine Dateien entpackt.")
         inner = os.path.join(tmp_extract, entries[0])
         if len(entries) == 1 and os.path.isdir(inner):
             os.rename(inner, db_dir)
