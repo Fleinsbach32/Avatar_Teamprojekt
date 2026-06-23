@@ -1100,6 +1100,9 @@ body {
     this.style.height = Math.min(this.scrollHeight, 120) + "px";
   });
 
+  const MAX_SEND_RETRIES = 2;
+  const SEND_RETRY_DELAY = 1500;
+
   async function sendMessage() {
     const input = document.getElementById("userInput");
     const text  = input.value.trim();
@@ -1114,11 +1117,19 @@ body {
     if (chipsRow) chipsRow.style.display = "none";
 
     addMessage("user", text);
+    attemptSend(text, 0);
+  }
+
+  async function attemptSend(text, attempt) {
     document.getElementById("sendBtn").disabled = true;
-    document.getElementById("statusText").textContent = "denkt nach...";
+    document.getElementById("statusText").textContent =
+      attempt > 0 ? "Verbindung wird erneut versucht…" : "denkt nach...";
 
     const typingId = showTyping();
     let streamEl = null;
+    let gotContent = false;
+    let failed = false;
+    let errMessage = "Service momentan nicht verfügbar.";
 
     try {
       const res = await fetch(API_URL, {
@@ -1148,6 +1159,7 @@ body {
           try { evt = JSON.parse(line.slice(5)); } catch (_) { continue; }
 
           if (evt.type === "chunk") {
+            gotContent = true;
             if (!streamEl) { removeTyping(typingId); streamEl = addStreamingMessage(); }
             streamEl.content.textContent += evt.text;
             const messages = document.getElementById("messages");
@@ -1164,17 +1176,27 @@ body {
             markUnread();
             startIdleTimer();
           } else if (evt.type === "error") {
-            removeTyping(typingId);
-            showError(evt.message);
+            failed = true;
+            errMessage = evt.message || errMessage;
           }
         }
       }
     } catch (err) {
-      showError(err.message);
+      failed = true;
+      errMessage = err.message || errMessage;
     } finally {
       removeTyping(typingId);
       document.getElementById("sendBtn").disabled = false;
       document.getElementById("statusText").textContent = "bereit";
+    }
+
+    // Auto-Retry nur wenn ein Fehler auftrat und noch keine Antwort gestreamt wurde
+    if (failed && !gotContent && attempt < MAX_SEND_RETRIES) {
+      await new Promise(r => setTimeout(r, SEND_RETRY_DELAY));
+      return attemptSend(text, attempt + 1);
+    }
+    if (failed && !gotContent) {
+      showError(errMessage);
     }
   }
 
