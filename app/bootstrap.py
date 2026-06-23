@@ -46,6 +46,9 @@ def ensure_chroma_db(db_dir: str) -> None:
                 tf.extractall(tmp_extract, filter="data")
         elif zipfile.is_zipfile(out):
             with zipfile.ZipFile(out) as zf:
+                for member in zf.namelist():
+                    if os.path.isabs(member) or ".." in member.split("/"):
+                        raise RuntimeError(f"Unsicherer Pfad im Archiv: {member}")
                 zf.extractall(tmp_extract)
         else:
             raise RuntimeError(f"Unbekanntes Archivformat: {out}")

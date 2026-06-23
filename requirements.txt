@@ -45,7 +45,7 @@ PyMuPDF>=1.24
 langdetect>=1.0.9
 
 # Deployment
-gdown>=5.0
+gdown>=5.0,<6
 
 # PDF (fill_db.py)
 pypdf==6.10.2

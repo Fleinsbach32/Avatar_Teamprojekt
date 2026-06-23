@@ -3,6 +3,7 @@ import io
 import logging
 import sys
 import tarfile
+import zipfile
 from unittest.mock import MagicMock
 
 import pytest
@@ -111,4 +112,33 @@ def test_download_when_db_dir_empty(tmp_path, monkeypatch):
     finally:
         sys.modules.pop("gdown", None)
 
+    mock_gdown.download.assert_called_once()
+
+
+def test_download_and_extract_zip(tmp_path, monkeypatch):
+    """ZIP-Archiv wird korrekt entpackt und db_dir entsteht."""
+    db_dir = tmp_path / "chroma_db"
+    monkeypatch.setenv("CHROMA_DRIVE_FILE_ID", "abc123")
+
+    # Baue echtes ZIP-Archiv: enthält chroma_db/chroma.sqlite3
+    archive_path = tmp_path / "archive.zip"
+    with zipfile.ZipFile(str(archive_path), "w") as zf:
+        zf.writestr("chroma_db/chroma.sqlite3", "fake-db")
+
+    def fake_download(url, output, **kwargs):
+        import shutil
+        shutil.copy(str(archive_path), output)
+        return output
+
+    mock_gdown = MagicMock()
+    mock_gdown.download.side_effect = fake_download
+    sys.modules["gdown"] = mock_gdown
+    try:
+        from app.bootstrap import ensure_chroma_db
+        ensure_chroma_db(str(db_dir))
+    finally:
+        sys.modules.pop("gdown", None)
+
+    assert db_dir.exists()
+    assert (db_dir / "chroma.sqlite3").exists()
     mock_gdown.download.assert_called_once()
