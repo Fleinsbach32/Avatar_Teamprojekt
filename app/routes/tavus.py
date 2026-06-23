@@ -2,6 +2,7 @@ import os
 import asyncio
 import json
 import logging
+import re
 from urllib.parse import quote
 
 import httpx
@@ -40,6 +41,39 @@ _VOICE_CONTEXT = {
         "For official data, refer to campus.kit.edu."
     ),
 }
+
+
+# URLs/Domains (z.B. campus.kit.edu) werden vorgelesen mit "punkt" statt Punkt,
+# sonst stockt die TTS an jedem Punkt. TLD muss aus Buchstaben bestehen, damit
+# Dezimalzahlen (2.5) nicht fälschlich getroffen werden.
+_DOMAIN_RE = re.compile(r"\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b", re.IGNORECASE)
+# Vollständiger Satz: bis zum ersten Satzzeichen, gefolgt von Whitespace.
+_SENTENCE_END_RE = re.compile(r"(.+?[.!?]+[\)\]\"']*)\s+", re.DOTALL)
+
+
+def _tts_normalize(text: str) -> str:
+    """Macht TTS-feindliche Tokens vorlesefreundlich (Domains → 'punkt')."""
+    return _DOMAIN_RE.sub(lambda m: m.group(0).replace(".", " punkt "), text)
+
+
+def _flush_sentences(buf: str, final: bool = False) -> tuple[list[str], str]:
+    """Zerlegt den Puffer in vollständige Sätze. Gibt (fertige_sätze, rest) zurück.
+    URLs werden vor der Satztrennung normalisiert, damit ihre Punkte keine
+    falschen Satzgrenzen erzeugen. Bei final=True wird der Rest mit ausgegeben."""
+    buf = _tts_normalize(buf)
+    out: list[str] = []
+    while True:
+        m = _SENTENCE_END_RE.match(buf)
+        if not m:
+            break
+        sentence = m.group(1).strip()
+        if sentence:
+            out.append(sentence + " ")
+        buf = buf[m.end():]
+    if final and buf.strip():
+        out.append(buf.strip())
+        buf = ""
+    return out, buf
 
 
 class TavusPrefsRequest(BaseModel):
@@ -206,6 +240,7 @@ Frage: {user_message}"""
 
     async def stream_answer():
         gesendet = False
+        buffer = ""
         for versuch in range(3):
             try:
                 stream = await client.aio.models.generate_content_stream(
@@ -216,7 +251,10 @@ Frage: {user_message}"""
                 async for chunk in stream:
                     if chunk.text:
                         gesendet = True
-                        yield f'data: {json.dumps({"choices": [{"delta": {"content": chunk.text}, "finish_reason": None}]})}\n\n'
+                        buffer += chunk.text
+                        deltas, buffer = _flush_sentences(buffer)
+                        for d in deltas:
+                            yield f'data: {json.dumps({"choices": [{"delta": {"content": d}, "finish_reason": None}]})}\n\n'
                 break
             except Exception as e:
                 logging.warning(f"tavus/llm Gemini Fehler (Versuch {versuch + 1}): {e}")
@@ -224,7 +262,12 @@ Frage: {user_message}"""
                     break
                 if versuch < 2:
                     await asyncio.sleep(VOICE_RETRY_DELAY)
-        if not gesendet:
+        if gesendet:
+            # Restpuffer (letzter Satz ohne abschließendes Whitespace) ausgeben
+            deltas, buffer = _flush_sentences(buffer, final=True)
+            for d in deltas:
+                yield f'data: {json.dumps({"choices": [{"delta": {"content": d}, "finish_reason": None}]})}\n\n'
+        else:
             yield f'data: {json.dumps({"choices": [{"delta": {"content": "Service momentan nicht verfügbar."}, "finish_reason": None}]})}\n\n'
         yield f'data: {json.dumps({"choices": [{"delta": {}, "finish_reason": "stop"}]})}\n\n'
         yield 'data: [DONE]\n\n'

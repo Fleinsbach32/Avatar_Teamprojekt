@@ -108,17 +108,22 @@ def test_tavus_llm_streams_chunks(mock_client, mock_collection):
     assert "text/event-stream" in response.headers.get("content-type", "")
     body = response.text
     assert "[DONE]" in body
-    assert "campus.kit.edu" in body
+    # URL wird vorlesefreundlich normalisiert
+    assert "campus punkt kit punkt edu" in body
+    assert "campus.kit.edu" not in body
     import json as j
     deltas = [
         j.loads(line[5:])["choices"][0]["delta"].get("content")
         for line in body.split("\n\n")
         if line.strip().startswith("data:") and "[DONE]" not in line
+        and j.loads(line[5:])["choices"][0]["delta"].get("content")
     ]
-    assert "Prüfungen meldest du " in deltas
-    assert "über campus.kit.edu an." in deltas
+    # Token-Fragmente werden zu einem vollständigen Satz gepuffert
+    full = "".join(deltas)
+    assert "Prüfungen meldest du über campus punkt kit punkt edu an." in full
     assert response.headers["cache-control"] == "no-cache"
     assert response.headers["x-accel-buffering"] == "no"
+    _reset_voice_prefs()
 
 
 @patch("app.rag.collection")
@@ -323,3 +328,39 @@ def test_avatar_config_returns_tavus():
     response = test_client.get("/avatar/config")
     assert response.status_code == 200
     assert response.json() == {"provider": "tavus"}
+
+
+# ── Avatar-Pausen: Satz-Puffern + TTS-Normalisierung ─────────────────────────
+
+def test_tts_normalize_urls():
+    from app.routes.tavus import _tts_normalize
+    assert _tts_normalize("Schau auf campus.kit.edu nach.") == "Schau auf campus punkt kit punkt edu nach."
+    # Reiner Text ohne Domain bleibt unverändert
+    assert _tts_normalize("Das ist ein ganz normaler Satz.") == "Das ist ein ganz normaler Satz."
+    # Dezimalzahl ist keine Domain (TLD muss aus Buchstaben bestehen)
+    assert _tts_normalize("Die Note ist 2.5 wert.") == "Die Note ist 2.5 wert."
+
+
+@patch("app.rag.collection")
+@patch("app.routes.tavus.client")
+def test_tavus_llm_buffers_into_sentences(mock_client, mock_collection):
+    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
+    # Tokenweises Streaming, das Satzgrenzen kreuzt
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=make_async_stream(["Erster ", "Satz. Zwei", "ter Satz."])
+    )
+    response = test_client.post("/tavus/llm", json={
+        "messages": [{"role": "user", "content": "Test"}],
+        "stream": True
+    })
+    import json as j
+    deltas = [
+        j.loads(line[5:])["choices"][0]["delta"].get("content")
+        for line in response.text.split("\n\n")
+        if line.strip().startswith("data:") and "[DONE]" not in line
+        and j.loads(line[5:])["choices"][0]["delta"].get("content")
+    ]
+    # Jeder Satz ist ein eigenes, vollständiges Delta — keine Fragmente wie "Erster "
+    assert any(d.strip() == "Erster Satz." for d in deltas)
+    assert any(d.strip() == "Zweiter Satz." for d in deltas)
+    _reset_voice_prefs()
