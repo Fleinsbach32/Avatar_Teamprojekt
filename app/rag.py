@@ -122,6 +122,20 @@ def _query_safe(where: dict | None, n_results: int, **kwargs) -> dict:
             return {"documents": [[]], "distances": [[]]}
 
 
+def _get_by_contains(where: dict | None, contains: str, limit: int = 3) -> list[str]:
+    """Reine Volltext-Teilstringsuche via collection.get — OHNE Embedding.
+    Deutlich schneller als query(query_texts=...), weil kein Embedding-Modell läuft;
+    für Modulnamen-Treffer ist die semantische Distanz ohnehin irrelevant.
+    Gibt eine flache Liste der Dokumente zurück (leer bei Fehler/keinem Treffer)."""
+    base: dict = {"where_document": {"$contains": contains}, "limit": limit, "include": ["documents"]}
+    if where is not None:
+        base["where"] = where
+    try:
+        return collection.get(**base).get("documents") or []
+    except Exception:
+        return []
+
+
 def rerank(docs: list[str], query: str, top_k: int = 6) -> list[str]:
     """Rankt Dokumente mit CrossEncoder neu und gibt die top_k zurück.
     Fallback auf einfaches Slicing wenn reranker nicht verfügbar."""
@@ -187,10 +201,12 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
     if module_match:
         module_id = module_match.group()
         id_results = _query_safe(_combine(where, {"module_id": module_id}), 3, query_texts=[query])
-        if not id_results["documents"][0]:
-            id_results = _query_safe(where, 3, query_texts=[query], where_document={"$contains": module_id})
-        if id_results["documents"][0]:
-            kontext = "\n\n".join(doc[:600] for doc in id_results["documents"][0])
+        id_docs = id_results["documents"][0]
+        if not id_docs:
+            # Volltext-Fallback ohne Embedding — Modul-IDs sind exakte Strings
+            id_docs = _get_by_contains(where, module_id, 3)
+        if id_docs:
+            kontext = "\n\n".join(doc[:600] for doc in id_docs)
             anweisung = (
                 "Der folgende Kontext aus der KIT-Wissensdatenbank enthält Informationen zum genannten Modul. "
                 "Beantworte die Frage auf Basis dieses Kontexts. "
@@ -203,14 +219,13 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
     # $contains (mit Groß-/Kleinschreibungs-Varianten + erstem Wort als Fallback).
     name_query = _module_name_from_number_question(query)
     if name_query:
-        name_results = {"documents": [[]], "distances": [[]]}
+        name_docs: list[str] = []
         for variant in _contains_variants(name_query):
-            name_results = _query_safe(where, 3, query_texts=[name_query],
-                                       where_document={"$contains": variant})
-            if name_results["documents"][0]:
+            name_docs = _get_by_contains(where, variant, 3)
+            if name_docs:
                 break
-        if name_results["documents"][0]:
-            kontext = "\n\n".join(doc[:600] for doc in name_results["documents"][0])
+        if name_docs:
+            kontext = "\n\n".join(doc[:600] for doc in name_docs)
             anweisung = (
                 "Der folgende Kontext aus der KIT-Wissensdatenbank enthält Module mit ihren "
                 "Modulnummern. Beantworte die Frage auf Basis dieses Kontexts "
@@ -219,8 +234,8 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
                 "Wenn das gesuchte Modul nicht im Kontext vorkommt, sage ehrlich, dass du die "
                 "Modulnummer nicht in der Datenbank hast, und empfehle campus.kit.edu."
             )
-            distanz = name_results["distances"][0][0] if name_results["distances"][0] else 0.2
-            return kontext, anweisung, distanz
+            # Fester Distanzwert — $contains-Treffer stammt immer aus der DB.
+            return kontext, anweisung, 0.2
         # Modul nicht in DB → kein Kontext, direkte Anweisung
         return (
             "",
@@ -233,18 +248,17 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
     # verhindert Halluzination von Alternativmodulen bei fehlendem Treffer.
     what_is_name = _module_name_from_what_is_question(query)
     if what_is_name:
-        what_results = {"documents": [[]], "distances": [[]]}
+        what_docs: list[str] = []
         for variant in _contains_variants(what_is_name):
-            what_results = _query_safe(where, 3, query_texts=[what_is_name],
-                                       where_document={"$contains": variant})
-            if what_results["documents"][0]:
+            what_docs = _get_by_contains(where, variant, 3)
+            if what_docs:
                 break
         logging.info(
             f"[RAG] was_ist='{what_is_name}': contains-Treffer="
-            f"{len(what_results['documents'][0])} (where={where})"
+            f"{len(what_docs)} (where={where})"
         )
-        if what_results["documents"][0]:
-            kontext = "\n\n".join(doc[:600] for doc in what_results["documents"][0])
+        if what_docs:
+            kontext = "\n\n".join(doc[:600] for doc in what_docs)
             anweisung = (
                 "Der folgende Kontext enthält Informationen zum angefragten Modul aus der "
                 "KIT-Wissensdatenbank. Beantworte die Frage ausschließlich auf Basis dieses Kontexts. "

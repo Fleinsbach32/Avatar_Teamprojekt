@@ -208,15 +208,41 @@ def test_module_name_extracted_from_number_question():
 
 def test_build_rag_context_number_question_searches_by_name():
     with patch("app.rag.collection") as mock_collection:
-        mock_collection.query.return_value = {
-            "documents": [["Modul: Angewandte Informatik [M-WIWI-101430] ..."]],
-            "distances": [[0.15]],
+        # Volltext-Treffer via collection.get (kein Embedding)
+        mock_collection.get.return_value = {
+            "documents": ["Modul: Angewandte Informatik [M-WIWI-101430] ..."],
         }
         from app.rag import build_rag_context
         _, anweisung, _ = build_rag_context("Wie lautet die Modulnummer von Angewandte Informatik?", studiengang="winfo_bsc")
-    # Suche lief mit dem Modulnamen, nicht der Füllfrage
-    assert mock_collection.query.call_args.kwargs["query_texts"] == ["Angewandte Informatik"]
+    # Suche lief als Volltext-$contains auf dem Modulnamen — ohne Embedding (kein query_texts)
+    first_get = mock_collection.get.call_args_list[0].kwargs
+    assert first_get["where_document"] == {"$contains": "Angewandte Informatik"}
+    assert mock_collection.query.call_count == 0
     assert "Modulnummer" in anweisung
+
+
+def test_get_by_contains_uses_collection_get_not_query():
+    from app.rag import _get_by_contains
+    with patch("app.rag.collection") as mock_collection:
+        mock_collection.get.return_value = {"documents": ["Treffer-Chunk"]}
+        docs = _get_by_contains({"program": "wing_bsc"}, "Controlling", 3)
+    assert docs == ["Treffer-Chunk"]
+    kwargs = mock_collection.get.call_args.kwargs
+    assert kwargs["where_document"] == {"$contains": "Controlling"}
+    assert kwargs["where"] == {"program": "wing_bsc"}
+    assert kwargs["limit"] == 3
+    mock_collection.query.assert_not_called()
+
+
+def test_what_is_module_uses_contains_get_no_embedding():
+    with patch("app.rag.collection") as mock_collection:
+        mock_collection.get.return_value = {"documents": ["Modul Controlling: ..."]}
+        from app.rag import build_rag_context
+        kontext, _, distanz = build_rag_context("Was ist das Modul Controlling?", studiengang="wing_bsc")
+    assert "Controlling" in kontext
+    assert distanz == 0.1
+    # contains-Pfad nutzt .get, kein Embedding-Query
+    assert mock_collection.query.call_count == 0
 
 
 def test_prompt_module_number_only_on_request():
