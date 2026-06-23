@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import chromadb
 from chromadb.utils import embedding_functions
 from sentence_transformers import CrossEncoder
+from app.bootstrap import ensure_chroma_db
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
@@ -14,7 +15,6 @@ MODULE_ID_RE = re.compile(r'\b[MT]-[A-Z]+-\d+\b')
 embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="paraphrase-multilingual-MiniLM-L12-v2"
 )
-from app.bootstrap import ensure_chroma_db
 
 CHROMA_DB_DIR = os.getenv("CHROMA_DB_DIR", "chroma_db")
 ensure_chroma_db(CHROMA_DB_DIR)
