@@ -277,3 +277,21 @@ def test_contains_variants_skips_short_first_word_as_fallback():
     variants = _contains_variants("Risk Analysis")
     assert "risk" not in variants          # "Risk" (4 Zeichen) nicht standalone
     assert "analysis" in variants          # "Analysis" (8 Zeichen) ist der Fallback
+
+
+# ── RAG-Timing wird geloggt ──────────────────────────────────────────────────
+
+def test_single_stage_logs_rag_timing(caplog):
+    import logging
+    from unittest.mock import patch
+    from app.rag import build_rag_context
+
+    with patch("app.rag.collection") as mock_coll:
+        mock_coll.query.return_value = {
+            "documents": [["KIT Info zur Bewerbung am Campus."]],
+            "distances": [[0.3]],
+        }
+        with caplog.at_level(logging.INFO):
+            build_rag_context("Wie bewerbe ich mich?")  # kein Studiengang → einstufig
+
+    assert any("[RAG-TIMING]" in r.message for r in caplog.records)

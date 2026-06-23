@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 import chromadb
 from chromadb.utils import embedding_functions
@@ -274,11 +275,13 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
     if studiengang and studiengang in STUDIENGANG_FILES:
         prog_n = 12 if is_pflicht else 8
         # Stufe 1 + 2 parallel: beide Queries sind unabhängig
+        _t_query = time.perf_counter()
         with ThreadPoolExecutor(max_workers=2) as pool:
             fut_prog = pool.submit(_query_safe, {"program": studiengang}, prog_n, query_texts=[query])
             fut_all  = pool.submit(_query_safe, {"program": "all"}, 4, query_texts=[query])
             prog_r   = fut_prog.result()
             all_r    = fut_all.result()
+        query_ms = (time.perf_counter() - _t_query) * 1000
         prog_docs  = prog_r["documents"][0]
         if not prog_docs:
             logging.warning(
@@ -289,7 +292,9 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
         all_docs   = all_r["documents"][0]
         all_dists  = all_r["distances"][0]
         # Kombinieren mit garantierter Handbuch-Priorität (max. 6 Chunks)
+        _t_rerank = time.perf_counter()
         docs = _merge_handbook_priority(prog_docs, all_docs, reranker, query, top_k=6, min_handbook=3)
+        rerank_ms = (time.perf_counter() - _t_rerank) * 1000
         combined_dists = prog_dists + all_dists
         # beste_distanz aus allen Kandidaten-Distanzen (Proxy für DB-Relevanz)
         beste_distanz = min(combined_dists) if combined_dists else 1.0
@@ -297,11 +302,23 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
             f"[RAG] SG={studiengang}: prog={len(prog_docs)} handbuch, all={len(all_docs)} general"
             f" → final={len(docs)} chunks"
         )
+        logging.info(
+            f"[RAG-TIMING] sg={studiengang} query={query_ms:.0f}ms rerank={rerank_ms:.0f}ms "
+            f"total={query_ms + rerank_ms:.0f}ms"
+        )
     else:
+        _t_query = time.perf_counter()
         results = _query_safe(where, 8, query_texts=[query])
+        query_ms = (time.perf_counter() - _t_query) * 1000
+        _t_rerank = time.perf_counter()
         docs  = rerank(results["documents"][0], query, top_k=6)
+        rerank_ms = (time.perf_counter() - _t_rerank) * 1000
         dists = results["distances"][0]
         beste_distanz = dists[0] if dists else 1.0
+        logging.info(
+            f"[RAG-TIMING] single query={query_ms:.0f}ms rerank={rerank_ms:.0f}ms "
+            f"total={query_ms + rerank_ms:.0f}ms"
+        )
 
     kontext = "\n\n".join(doc[:600] for doc in docs)
 
