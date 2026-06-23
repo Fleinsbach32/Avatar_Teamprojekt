@@ -1195,8 +1195,10 @@ body {
       await new Promise(r => setTimeout(r, SEND_RETRY_DELAY));
       return attemptSend(text, attempt + 1);
     }
-    if (failed && !gotContent) {
-      showError(errMessage);
+    if (failed) {
+      // Fehler vor jeglichem Inhalt → volle Fehlermeldung; Fehler mitten im Stream
+      // (gotContent) → Hinweis, dass die Antwort unvollständig ist.
+      showError(gotContent ? "Antwort unvollständig — bitte erneut versuchen." : errMessage);
     }
   }
 
