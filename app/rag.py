@@ -76,6 +76,15 @@ _WHAT_IS_MODULE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Erkennt "Wie viele ECTS/LP/Leistungspunkte/Credits hat (das Modul) X?"
+_ECTS_Q_RE = re.compile(
+    r'wie\s+viele\s+(?:ects|lp|leistungspunkte|credits?)\s+(?:punkte\s+)?'
+    r'(?:hat|haben|bekommt\s+man\s+(?:für|fuer)|bekomme\s+ich\s+(?:für|fuer))\s+'
+    r'(?:das\s+|dem\s+|der\s+|die\s+|den\s+|ein\s+)?(?:modul\s+|fach\s+|vorlesung\s+)?'
+    r'(.+?)[\?\.!]*\s*$',
+    re.IGNORECASE,
+)
+
 
 def _module_name_from_number_question(query: str) -> str | None:
     """Erkennt Fragen wie 'Wie lautet die Modulnummer von <Name>?' und gibt
@@ -91,6 +100,16 @@ def _module_name_from_number_question(query: str) -> str | None:
 def _module_name_from_what_is_question(query: str) -> str | None:
     """Erkennt 'Was ist das Modul X?' und gibt den Modulnamen X zurück."""
     m = _WHAT_IS_MODULE_RE.search(query)
+    if m:
+        name = m.group(1).strip().strip('"\'')
+        return name if len(name) >= 3 else None
+    return None
+
+
+def _module_name_from_ects_question(query: str) -> str | None:
+    """Erkennt 'Wie viele ECTS hat das Modul X?' und gibt X zurück, damit die
+    Frage über den Modulindex statt unzuverlässig semantisch beantwortet wird."""
+    m = _ECTS_Q_RE.search(query)
     if m:
         name = m.group(1).strip().strip('"\'')
         return name if len(name) >= 3 else None
@@ -341,6 +360,22 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
                 1.0,
             )
         # Kein Studiengang → weiter zur Standard-Semantiksuche unten
+
+    # "Wie viele ECTS hat das Modul X?" → gezielter Modulindex-Treffer auf den
+    # Modulnamen. Verhindert, dass die semantische Suche statt des Moduls eine
+    # generische Curriculum-Übersicht liefert (dann landet die Frage beim LLM).
+    ects_name = _module_name_from_ects_question(query)
+    if ects_name:
+        ects_docs = _lookup_module_by_name(_contains_variants(ects_name), studiengang, 3)
+        if ects_docs:
+            kontext = "\n\n".join(doc[:600] for doc in ects_docs)
+            anweisung = (
+                "Der folgende Kontext enthält das angefragte Modul aus der KIT-Wissensdatenbank. "
+                "Beantworte die Frage zu Leistungspunkten/ECTS ausschließlich auf Basis dieses Kontexts. "
+                "Nenne den vollständigen Modulnamen wie er im Kontext steht."
+            )
+            return kontext, anweisung, 0.1
+        # Kein Modul-Treffer (z.B. Programm-Frage) → weiter zur Standard-Semantiksuche
 
     # Standardsuche — zweistufig wenn Studiengang gewählt, sonst einstufig.
     # Problem: "all"-getaggte Web-Chunks (54k) überdecken bei einstufiger Suche

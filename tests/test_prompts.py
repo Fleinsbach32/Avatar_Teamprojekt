@@ -245,6 +245,44 @@ def test_what_is_module_uses_index_no_scan():
         rag._module_index = None
 
 
+def test_ects_question_extracts_module_name():
+    from app.rag import _module_name_from_ects_question as ex
+    assert ex("Wie viele ECTS hat das Modul Mathematik 1?") == "Mathematik 1"
+    assert ex("Wie viele Leistungspunkte hat Controlling?") == "Controlling"
+    assert ex("Wie viele LP bekomme ich für das Modul Statistik?") == "Statistik"
+    assert ex("Wie heißt der Dekan?") is None
+
+
+def test_ects_module_question_uses_index():
+    import app.rag as rag
+    rag._module_index = [
+        {"program": "wing_bsc", "module_id": "M-MATH-1", "module_name": "Mathematik 1",
+         "module_name_lower": "mathematik 1", "document": "Modul Mathematik 1: 7,5 ECTS, Pflicht ..."},
+        {"program": "wing_bsc", "module_id": "M-MATH-2", "module_name": "Mathematik 2",
+         "module_name_lower": "mathematik 2", "document": "Modul Mathematik 2: ..."},
+    ]
+    try:
+        with patch("app.rag.collection") as mock_collection:
+            kontext, anweisung, distanz = rag.build_rag_context(
+                "Wie viele ECTS hat das Modul Mathematik 1?", studiengang="wing_bsc")
+        assert "Mathematik 1" in kontext
+        assert "Mathematik 2" not in kontext
+        assert distanz == 0.1                       # Treffer aus der Wissensbasis
+        assert "ECTS" in anweisung
+        mock_collection.query.assert_not_called()   # Index statt unzuverlässiger Semantiksuche
+    finally:
+        rag._module_index = None
+
+
+def test_base_prompt_lists_studiengaenge():
+    from app.prompts import build_prompt
+    for mode in ("text", "voice"):
+        p = build_prompt(mode, "de")
+        assert "Digital Economics" in p
+        assert "Wirtschaftsinformatik" in p
+        assert "180 ECTS" in p
+
+
 def test_get_by_contains_uses_collection_get_not_query():
     from app.rag import _get_by_contains
     with patch("app.rag.collection") as mock_collection:
