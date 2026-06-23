@@ -1,6 +1,5 @@
 # tests/test_bootstrap.py
 import io
-import os
 import logging
 import sys
 import tarfile
@@ -94,3 +93,22 @@ def test_download_failure_raises(tmp_path, monkeypatch):
             ensure_chroma_db(str(db_dir))
     finally:
         sys.modules.pop("gdown", None)
+
+
+def test_download_when_db_dir_empty(tmp_path, monkeypatch):
+    """Leeres Verzeichnis gilt nicht als befüllt → Download wird ausgelöst."""
+    db_dir = tmp_path / "chroma_db"
+    db_dir.mkdir()  # leer, keine Dateien drin
+    monkeypatch.setenv("CHROMA_DRIVE_FILE_ID", "abc123")
+
+    mock_gdown = MagicMock()
+    mock_gdown.download.return_value = None  # schlägt fehl — wir testen nur, ob es aufgerufen wird
+    sys.modules["gdown"] = mock_gdown
+    try:
+        from app.bootstrap import ensure_chroma_db
+        with pytest.raises(RuntimeError):  # fehlgeschlagener Download wirft RuntimeError
+            ensure_chroma_db(str(db_dir))
+    finally:
+        sys.modules.pop("gdown", None)
+
+    mock_gdown.download.assert_called_once()
