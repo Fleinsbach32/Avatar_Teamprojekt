@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 load_dotenv()
 
 from app.gemini import client, gemini_config
-from app.rag import collection, reranker
+from app.rag import collection, reranker, _module_index_get
 from app.routes import avatar, chat, tavus
 
 
@@ -19,6 +19,11 @@ async def lifespan(app: FastAPI):
         collection.query(query_texts=["Warmup"], n_results=1)
     except Exception as e:
         logging.warning(f"ChromaDB Warmup fehlgeschlagen: {e}")
+    # Modulindex einmalig vorladen, damit die erste Modul-Frage nicht ~400ms wartet
+    try:
+        _module_index_get()
+    except Exception as e:
+        logging.warning(f"Modulindex Warmup fehlgeschlagen: {e}")
     if reranker is not None:
         try:
             reranker.predict([("Warmup", "Warmup")])

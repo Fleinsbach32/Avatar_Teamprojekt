@@ -55,14 +55,15 @@ def test_rerank_fewer_docs_than_top_k(monkeypatch):
     assert result == ["x", "y"]
 
 
-def test_standard_search_fetches_8_candidates_and_reranks(monkeypatch):
-    """Einstufige Suche (kein Studiengang) holt 8 Kandidaten und rerankt auf 6."""
+def test_standard_search_fetches_6_candidates_and_reranks(monkeypatch):
+    """Einstufige Suche (kein Studiengang) holt 6 Kandidaten und rerankt auf 6."""
     mock_reranker = MagicMock()
-    mock_reranker.predict.return_value = list(range(7, -1, -1))  # 7..0
+    mock_reranker.predict.return_value = list(range(5, -1, -1))  # 5..0
     monkeypatch.setattr(rag_module, "reranker", mock_reranker)
 
-    fake_docs = [f"doc_{i}" for i in range(8)]
-    fake_dists = [0.3 + i * 0.01 for i in range(8)]
+    fake_docs = [f"doc_{i}" for i in range(6)]
+    # beste Distanz 0.3 ≥ Schwelle → Reranker läuft (wird nicht übersprungen)
+    fake_dists = [0.3 + i * 0.01 for i in range(6)]
     mock_collection = MagicMock()
     mock_collection.query.return_value = {
         "documents": [fake_docs],
@@ -72,14 +73,34 @@ def test_standard_search_fetches_8_candidates_and_reranks(monkeypatch):
 
     kontext, anweisung, distanz = rag_module.build_rag_context("Wie bewerbe ich mich?")
 
-    # ChromaDB wurde mit n_results=8 aufgerufen
+    # ChromaDB wurde mit n_results=6 aufgerufen
     call_kwargs = mock_collection.query.call_args_list[0][1]
-    assert call_kwargs["n_results"] == 8
+    assert call_kwargs["n_results"] == 6
 
     # Reranker wurde aufgerufen
     assert mock_reranker.predict.called
 
     # Kontext enthält maximal 6 Chunks
+    chunk_count = kontext.count("\n\n") + 1 if kontext else 0
+    assert chunk_count == 6
+
+
+def test_single_stage_skips_reranker_when_distance_confident(monkeypatch):
+    """Ist die beste Embedding-Distanz < Schwelle, wird der Reranker übersprungen."""
+    mock_reranker = MagicMock()
+    monkeypatch.setattr(rag_module, "reranker", mock_reranker)
+
+    fake_docs = [f"doc_{i}" for i in range(6)]
+    fake_dists = [0.1 + i * 0.01 for i in range(6)]  # beste 0.1 < 0.3 → Skip
+    mock_collection = MagicMock()
+    mock_collection.query.return_value = {"documents": [fake_docs], "distances": [fake_dists]}
+    monkeypatch.setattr(rag_module, "collection", mock_collection)
+
+    kontext, _, distanz = rag_module.build_rag_context("Wie bewerbe ich mich?")
+
+    assert not mock_reranker.predict.called          # übersprungen
+    assert distanz == pytest.approx(0.1)
+    # Embedding-Reihenfolge bleibt erhalten, max. 6 Chunks
     chunk_count = kontext.count("\n\n") + 1 if kontext else 0
     assert chunk_count == 6
 
@@ -92,9 +113,10 @@ def test_zweistufige_suche_kombiniert_und_rerankt(monkeypatch):
     monkeypatch.setattr(rag_module, "reranker", mock_reranker)
 
     prog_docs = [f"prog_{i}" for i in range(10)]
-    prog_dists = [0.2 + i * 0.01 for i in range(10)]
+    # beste Distanz 0.35 ≥ Schwelle → Reranker läuft (wird nicht übersprungen)
+    prog_dists = [0.35 + i * 0.01 for i in range(10)]
     all_docs = [f"all_{i}" for i in range(6)]
-    all_dists = [0.35 + i * 0.01 for i in range(6)]
+    all_dists = [0.40 + i * 0.01 for i in range(6)]
 
     call_count = 0
 
@@ -127,8 +149,8 @@ def test_zweistufige_suche_kombiniert_und_rerankt(monkeypatch):
     assert distanz == pytest.approx(min(prog_dists[0], all_dists[0]), abs=0.01)
 
 
-def test_zweistufig_fetches_8_prog_and_4_all(monkeypatch):
-    """Zweistufige Suche holt 8 Handbuch- + 4 allgemeine Kandidaten (Latenz)."""
+def test_zweistufig_fetches_6_prog_and_3_all(monkeypatch):
+    """Zweistufige Suche holt 6 Handbuch- + 3 allgemeine Kandidaten (Latenz)."""
     mock_reranker = MagicMock()
     mock_reranker.predict.side_effect = lambda pairs: [1.0 - i * 0.01 for i in range(len(pairs))]
     monkeypatch.setattr(rag_module, "reranker", mock_reranker)
@@ -150,12 +172,12 @@ def test_zweistufig_fetches_8_prog_and_4_all(monkeypatch):
 
     rag_module.build_rag_context("Welche Module gibt es?", studiengang="winfo_bsc")
 
-    assert requested_n["winfo_bsc"] == 8
-    assert requested_n["all"] == 4
+    assert requested_n["winfo_bsc"] == 6
+    assert requested_n["all"] == 3
 
 
-def test_zweistufig_pflicht_fetches_12_prog(monkeypatch):
-    """Pflichtmodul-Frage holt 12 Handbuch-Kandidaten."""
+def test_zweistufig_pflicht_fetches_9_prog(monkeypatch):
+    """Pflichtmodul-Frage holt 9 Handbuch-Kandidaten."""
     mock_reranker = MagicMock()
     mock_reranker.predict.side_effect = lambda pairs: [1.0 - i * 0.01 for i in range(len(pairs))]
     monkeypatch.setattr(rag_module, "reranker", mock_reranker)
@@ -176,7 +198,7 @@ def test_zweistufig_pflicht_fetches_12_prog(monkeypatch):
 
     rag_module.build_rag_context("Welche Pflichtmodule gibt es?", studiengang="wing_bsc")
 
-    assert requested_n["wing_bsc"] == 12
+    assert requested_n["wing_bsc"] == 9
 
 
 def test_merge_handbook_priority_forces_min_handbook():
@@ -253,9 +275,9 @@ def test_rag_warns_when_no_handbook_chunks_for_studiengang(caplog):
     assert any("Keine Handbuch-Chunks" in r.message for r in caplog.records)
 
 
-# ── Einstufige Suche: n_results 8 statt 15 ───────────────────────────────────
+# ── Einstufige Suche: n_results 6 ────────────────────────────────────────────
 
-def test_single_stage_uses_8_results_not_15():
+def test_single_stage_uses_6_results():
     from unittest.mock import patch
     from app.rag import build_rag_context
 
@@ -264,7 +286,7 @@ def test_single_stage_uses_8_results_not_15():
         build_rag_context("Wie bewerbe ich mich?")   # kein Studiengang → einstufig
 
     assert mock_coll.query.call_count == 1
-    assert mock_coll.query.call_args.kwargs["n_results"] == 8
+    assert mock_coll.query.call_args.kwargs["n_results"] == 6
 
 
 # ── _contains_variants: kurzes erstes Wort nicht als Fallback ────────────────

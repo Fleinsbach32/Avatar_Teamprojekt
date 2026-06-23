@@ -206,19 +206,43 @@ def test_module_name_extracted_from_number_question():
     assert extract("Worum geht es im Modul Angewandte Informatik?") is None
 
 
-def test_build_rag_context_number_question_searches_by_name():
-    with patch("app.rag.collection") as mock_collection:
-        # Volltext-Treffer via collection.get (kein Embedding)
-        mock_collection.get.return_value = {
-            "documents": ["Modul: Angewandte Informatik [M-WIWI-101430] ..."],
-        }
-        from app.rag import build_rag_context
-        _, anweisung, _ = build_rag_context("Wie lautet die Modulnummer von Angewandte Informatik?", studiengang="winfo_bsc")
-    # Suche lief als Volltext-$contains auf dem Modulnamen — ohne Embedding (kein query_texts)
-    first_get = mock_collection.get.call_args_list[0].kwargs
-    assert first_get["where_document"] == {"$contains": "Angewandte Informatik"}
-    assert mock_collection.query.call_count == 0
-    assert "Modulnummer" in anweisung
+def test_build_rag_context_number_question_uses_index():
+    import app.rag as rag
+    rag._module_index = [
+        {"program": "winfo_bsc", "module_id": "M-WIWI-101430",
+         "module_name": "Angewandte Informatik", "module_name_lower": "angewandte informatik",
+         "document": "Modul: Angewandte Informatik [M-WIWI-101430] ..."},
+    ]
+    try:
+        with patch("app.rag.collection") as mock_collection:
+            _, anweisung, _ = rag.build_rag_context(
+                "Wie lautet die Modulnummer von Angewandte Informatik?", studiengang="winfo_bsc")
+        # Lookup lief über den In-Memory-Index — keine ChromaDB-Abfrage nötig
+        mock_collection.query.assert_not_called()
+        mock_collection.get.assert_not_called()
+        assert "Modulnummer" in anweisung
+    finally:
+        rag._module_index = None
+
+
+def test_what_is_module_uses_index_no_scan():
+    import app.rag as rag
+    rag._module_index = [
+        {"program": "wing_bsc", "module_id": "M-WIWI-1", "module_name": "Controlling",
+         "module_name_lower": "controlling", "document": "Modul Controlling: Grundlagen ..."},
+        {"program": "wing_bsc", "module_id": "M-WIWI-2", "module_name": "Marketing",
+         "module_name_lower": "marketing", "document": "Modul Marketing: ..."},
+    ]
+    try:
+        with patch("app.rag.collection") as mock_collection:
+            kontext, _, distanz = rag.build_rag_context("Was ist das Modul Controlling?", studiengang="wing_bsc")
+        assert "Controlling" in kontext
+        assert "Marketing" not in kontext        # nur der passende Modulname
+        assert distanz == 0.1
+        mock_collection.query.assert_not_called()  # Index statt Scan
+        mock_collection.get.assert_not_called()
+    finally:
+        rag._module_index = None
 
 
 def test_get_by_contains_uses_collection_get_not_query():
@@ -234,15 +258,20 @@ def test_get_by_contains_uses_collection_get_not_query():
     mock_collection.query.assert_not_called()
 
 
-def test_what_is_module_uses_contains_get_no_embedding():
-    with patch("app.rag.collection") as mock_collection:
-        mock_collection.get.return_value = {"documents": ["Modul Controlling: ..."]}
-        from app.rag import build_rag_context
-        kontext, _, distanz = build_rag_context("Was ist das Modul Controlling?", studiengang="wing_bsc")
-    assert "Controlling" in kontext
-    assert distanz == 0.1
-    # contains-Pfad nutzt .get, kein Embedding-Query
-    assert mock_collection.query.call_count == 0
+def test_name_lookup_falls_back_to_contains_when_index_empty():
+    import app.rag as rag
+    rag._module_index = []   # leerer Index → Fallback auf $contains-Scan
+    try:
+        with patch("app.rag.collection") as mock_collection:
+            mock_collection.get.return_value = {"documents": ["Modul Controlling: ..."]}
+            kontext, _, distanz = rag.build_rag_context("Was ist das Modul Controlling?", studiengang="wing_bsc")
+        assert "Controlling" in kontext
+        assert distanz == 0.1
+        # Fallback nutzt collection.get ($contains), kein Embedding-Query
+        assert mock_collection.query.call_count == 0
+        assert mock_collection.get.called
+    finally:
+        rag._module_index = None
 
 
 def test_prompt_module_number_only_on_request():

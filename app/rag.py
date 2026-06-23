@@ -26,6 +26,10 @@ except Exception as e:
     logging.warning(f"Reranker konnte nicht geladen werden: {e}")
     reranker = None
 
+# Unterhalb dieser Embedding-Distanz ist der Treffer eindeutig genug, dass der
+# CrossEncoder-Reranker übersprungen werden kann (spart ~200–600ms).
+RERANK_SKIP_DISTANCE = 0.3
+
 STUDIENGANG_FILES: dict[str, list[str]] = {
     # Bachelor
     "wing_bsc":    ["mhb_wiing_BSc_de_aktuell.pdf"],   # Wirtschaftsingenieurwesen
@@ -136,6 +140,71 @@ def _get_by_contains(where: dict | None, contains: str, limit: int = 3) -> list[
         return []
 
 
+# In-Memory-Index aller Handbuch-Module. ChromaDBs where_document $contains ist ein
+# Brute-Force-Volltextscan (~1.4s über alle 67k Docs, unabhängig vom Metadaten-Filter).
+# Modulnamen-Lookups laufen stattdessen über diesen einmalig geladenen Index.
+_module_index: list[dict] | None = None
+
+
+def _build_module_index() -> list[dict]:
+    """Lädt alle Handbuch-Chunks (doc_type='handbook') einmalig in den Speicher.
+    Jeder Eintrag: {program, module_id, module_name, module_name_lower, document}.
+    Bei Fehler (z.B. DB ohne doc_type-Metadaten) → leere Liste (Fallback greift)."""
+    try:
+        res = collection.get(where={"doc_type": "handbook"}, include=["documents", "metadatas"])
+        docs = res.get("documents") or []
+        metas = res.get("metadatas") or []
+        index = []
+        for doc, meta in zip(docs, metas):
+            meta = meta or {}
+            name = meta.get("module_name") or ""
+            index.append({
+                "program": meta.get("program"),
+                "module_id": meta.get("module_id") or "",
+                "module_name": name,
+                "module_name_lower": name.lower(),
+                "document": doc or "",
+            })
+        logging.info(f"[RAG] Modulindex geladen: {len(index)} Handbuch-Chunks")
+        return index
+    except Exception as e:
+        logging.warning(f"[RAG] Modulindex konnte nicht geladen werden: {e}")
+        return []
+
+
+def _module_index_get() -> list[dict]:
+    """Gibt den (lazy einmalig aufgebauten) Modulindex zurück."""
+    global _module_index
+    if _module_index is None:
+        _module_index = _build_module_index()
+    return _module_index
+
+
+def _lookup_module_by_name(variants: list[str], studiengang: str | None, limit: int = 3) -> list[str]:
+    """Findet Handbuch-Chunks per Modulname über den In-Memory-Index (kein
+    ChromaDB-$contains-Scan). Probiert die Schreibvarianten der Reihe nach.
+    Fällt auf den $contains-Scan zurück, wenn der Index leer ist."""
+    idx = _module_index_get()
+    if idx:
+        for variant in variants:
+            needle = variant.lower()
+            hits = [
+                rec["document"] for rec in idx
+                if (studiengang is None or rec["program"] == studiengang)
+                and needle in rec["module_name_lower"]
+            ][:limit]
+            if hits:
+                return hits
+        return []
+    # Fallback ohne Index: langsamer $contains-Volltextscan
+    where = _studiengang_where(studiengang)
+    for variant in variants:
+        hits = _get_by_contains(where, variant, limit)
+        if hits:
+            return hits
+    return []
+
+
 def rerank(docs: list[str], query: str, top_k: int = 6) -> list[str]:
     """Rankt Dokumente mit CrossEncoder neu und gibt die top_k zurück.
     Fallback auf einfaches Slicing wenn reranker nicht verfügbar."""
@@ -219,11 +288,7 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
     # $contains (mit Groß-/Kleinschreibungs-Varianten + erstem Wort als Fallback).
     name_query = _module_name_from_number_question(query)
     if name_query:
-        name_docs: list[str] = []
-        for variant in _contains_variants(name_query):
-            name_docs = _get_by_contains(where, variant, 3)
-            if name_docs:
-                break
+        name_docs = _lookup_module_by_name(_contains_variants(name_query), studiengang, 3)
         if name_docs:
             kontext = "\n\n".join(doc[:600] for doc in name_docs)
             anweisung = (
@@ -248,11 +313,7 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
     # verhindert Halluzination von Alternativmodulen bei fehlendem Treffer.
     what_is_name = _module_name_from_what_is_question(query)
     if what_is_name:
-        what_docs: list[str] = []
-        for variant in _contains_variants(what_is_name):
-            what_docs = _get_by_contains(where, variant, 3)
-            if what_docs:
-                break
+        what_docs = _lookup_module_by_name(_contains_variants(what_is_name), studiengang, 3)
         logging.info(
             f"[RAG] was_ist='{what_is_name}': contains-Treffer="
             f"{len(what_docs)} (where={where})"
@@ -287,12 +348,12 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
     # Bei Pflichtmodul-Fragen werden mehr Studiengang-Chunks abgerufen.
     is_pflicht = any(kw in query.lower() for kw in ("pflichtmodul", "pflicht", "orientierungsprüfung", "orientierungspruefung"))
     if studiengang and studiengang in STUDIENGANG_FILES:
-        prog_n = 12 if is_pflicht else 8
+        prog_n = 9 if is_pflicht else 6
         # Stufe 1 + 2 parallel: beide Queries sind unabhängig
         _t_query = time.perf_counter()
         with ThreadPoolExecutor(max_workers=2) as pool:
             fut_prog = pool.submit(_query_safe, {"program": studiengang}, prog_n, query_texts=[query])
-            fut_all  = pool.submit(_query_safe, {"program": "all"}, 4, query_texts=[query])
+            fut_all  = pool.submit(_query_safe, {"program": "all"}, 3, query_texts=[query])
             prog_r   = fut_prog.result()
             all_r    = fut_all.result()
         query_ms = (time.perf_counter() - _t_query) * 1000
@@ -305,13 +366,15 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
         prog_dists = prog_r["distances"][0]
         all_docs   = all_r["documents"][0]
         all_dists  = all_r["distances"][0]
-        # Kombinieren mit garantierter Handbuch-Priorität (max. 6 Chunks)
-        _t_rerank = time.perf_counter()
-        docs = _merge_handbook_priority(prog_docs, all_docs, reranker, query, top_k=6, min_handbook=3)
-        rerank_ms = (time.perf_counter() - _t_rerank) * 1000
         combined_dists = prog_dists + all_dists
         # beste_distanz aus allen Kandidaten-Distanzen (Proxy für DB-Relevanz)
         beste_distanz = min(combined_dists) if combined_dists else 1.0
+        # Reranker überspringen, wenn die Embedding-Distanz schon eindeutig gut ist
+        active_reranker = None if beste_distanz < RERANK_SKIP_DISTANCE else reranker
+        # Kombinieren mit garantierter Handbuch-Priorität (max. 6 Chunks)
+        _t_rerank = time.perf_counter()
+        docs = _merge_handbook_priority(prog_docs, all_docs, active_reranker, query, top_k=6, min_handbook=3)
+        rerank_ms = (time.perf_counter() - _t_rerank) * 1000
         logging.info(
             f"[RAG] SG={studiengang}: prog={len(prog_docs)} handbuch, all={len(all_docs)} general"
             f" → final={len(docs)} chunks"
@@ -322,13 +385,17 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
         )
     else:
         _t_query = time.perf_counter()
-        results = _query_safe(where, 8, query_texts=[query])
+        results = _query_safe(where, 6, query_texts=[query])
         query_ms = (time.perf_counter() - _t_query) * 1000
-        _t_rerank = time.perf_counter()
-        docs  = rerank(results["documents"][0], query, top_k=6)
-        rerank_ms = (time.perf_counter() - _t_rerank) * 1000
         dists = results["distances"][0]
         beste_distanz = dists[0] if dists else 1.0
+        _t_rerank = time.perf_counter()
+        # Reranker überspringen, wenn die Embedding-Distanz schon eindeutig gut ist
+        if beste_distanz < RERANK_SKIP_DISTANCE:
+            docs = results["documents"][0][:6]   # bereits nach Distanz sortiert
+        else:
+            docs = rerank(results["documents"][0], query, top_k=6)
+        rerank_ms = (time.perf_counter() - _t_rerank) * 1000
         logging.info(
             f"[RAG-TIMING] single query={query_ms:.0f}ms rerank={rerank_ms:.0f}ms "
             f"total={query_ms + rerank_ms:.0f}ms"

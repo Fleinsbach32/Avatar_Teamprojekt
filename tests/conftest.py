@@ -1,6 +1,8 @@
 import sys
 from unittest.mock import MagicMock
 
+import pytest
+
 _mock_cross_encoder_instance = MagicMock()
 _mock_cross_encoder_instance.predict.side_effect = lambda pairs: [1.0 - i * 0.01 for i in range(len(pairs))]
 _mock_st = MagicMock()
@@ -16,3 +18,15 @@ sys.modules.update({
     'sentence_transformers': _mock_st,
     'torch': MagicMock(),
 })
+
+
+@pytest.fixture(autouse=True)
+def _reset_module_index():
+    """Setzt den lazy In-Memory-Modulindex vor jedem Test zurück, damit kein
+    Zustand zwischen Tests durchsickert (collection ist global gemockt)."""
+    try:
+        import app.rag as _rag
+        _rag._module_index = None
+    except Exception:
+        pass
+    yield
