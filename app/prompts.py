@@ -79,6 +79,24 @@ Questions unrelated to KIT: "I'm afraid that's outside my area, but happy to hel
 }
 
 
+# Kurzer Gesprächskontext für die Tavus-Persona (conversational_context).
+# Bewusst knapp gehalten — nicht der volle Voice-Prompt.
+VOICE_CONTEXT: dict[str, str] = {
+    "de": (
+        "Du bist KIRA, Studienberaterin am KIT (Karlsruher Institut für Technologie) "
+        "für Fragen rund um das Studium der Wirtschaftswissenschaften. "
+        "Antworte auf Deutsch, freundlich, kurz und präzise wie eine erfahrene Kommilitonin. "
+        "Sprich Studierende mit 'du' an. Keine Listen oder Aufzählungen. "
+        "Bei offiziellen Daten verweise auf campus.kit.edu."
+    ),
+    "en": (
+        "You are KIRA, an academic advisor at KIT (Karlsruhe Institute of Technology). "
+        "Answer in English, friendly and precise. "
+        "For official data, refer to campus.kit.edu."
+    ),
+}
+
+
 @functools.lru_cache(maxsize=4)
 def build_prompt(mode: Literal["text", "voice"], lang: str = "de") -> str:
     ext_map = KIRA_TEXT_EXT if mode == "text" else KIRA_VOICE_EXT

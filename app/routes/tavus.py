@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
 from app.gemini import client, gemini_config, SSE_HEADERS
-from app.prompts import build_prompt
+from app.prompts import build_prompt, VOICE_CONTEXT
 from app.rag import build_rag_context
 
 router = APIRouter()
@@ -25,23 +25,6 @@ VOICE_RETRY_DELAY = 2
 # ein globaler Zustand; das Frontend aktualisiert ihn bei Session-Start und bei
 # jeder Änderung von Sprache oder Studiengang.
 active_voice_prefs: dict = {"lang": "de", "studiengang": None}
-
-# Sprachabhängiger Gesprächskontext für die Tavus-Persona.
-_VOICE_CONTEXT = {
-    "de": (
-        "Du bist KIRA, Studienberaterin am KIT (Karlsruher Institut für Technologie) "
-        "für Fragen rund um das Studium der Wirtschaftswissenschaften. "
-        "Antworte auf Deutsch, freundlich, kurz und präzise wie eine erfahrene Kommilitonin. "
-        "Sprich Studierende mit 'du' an. Keine Listen oder Aufzählungen. "
-        "Bei offiziellen Daten verweise auf campus.kit.edu."
-    ),
-    "en": (
-        "You are KIRA, an academic advisor at KIT (Karlsruhe Institute of Technology). "
-        "Answer in English, friendly and precise. "
-        "For official data, refer to campus.kit.edu."
-    ),
-}
-
 
 # URLs/Domains (z.B. campus.kit.edu) werden vorgelesen mit "punkt" statt Punkt,
 # sonst stockt die TTS an jedem Punkt. TLD muss aus Buchstaben bestehen, damit
@@ -127,7 +110,7 @@ async def tavus_session(prefs: TavusPrefsRequest | None = None):
 
     body: dict = {
         "replica_id": replica_id,
-        "conversational_context": _VOICE_CONTEXT.get(prefs.lang, _VOICE_CONTEXT["de"]),
+        "conversational_context": VOICE_CONTEXT.get(prefs.lang, VOICE_CONTEXT["de"]),
         "custom_greeting": "",
     }
     if persona_id:
