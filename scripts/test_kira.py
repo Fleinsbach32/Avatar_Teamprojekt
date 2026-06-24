@@ -5,10 +5,10 @@ Quelle und Latenz aus.
 
 Aufruf:
     python scripts/test_kira.py
-    python scripts/test_kira.py --url http://localhost:8000 --user admin --pass geheim
+    python scripts/test_kira.py --url http://localhost:8000
 
-Umgebungsvariablen (Alternative zu Flags):
-    KIRA_URL, APP_USERNAME, APP_PASSWORD
+Umgebungsvariable (Alternative zum Flag):
+    KIRA_URL
 """
 import argparse
 import asyncio
@@ -144,14 +144,13 @@ async def ask(client: "httpx.AsyncClient", frage: str, lang: str,
     return full_text, latency, source
 
 
-async def main(url: str, username: str, password: str) -> None:
-    auth = (username, password)
+async def main(url: str) -> None:
     print(f"\n{'='*72}")
     print(f"  KIRA Systemtest  —  {url}")
     print(f"{'='*72}\n")
 
     failed = 0
-    async with httpx.AsyncClient(base_url=url, auth=auth) as client:
+    async with httpx.AsyncClient(base_url=url) as client:
         for i, (frage, lang, sg, desc) in enumerate(TESTS, 1):
             sid = f"test_{i:03d}"
             sg_tag = sg or "kein Studiengang"
@@ -173,9 +172,6 @@ async def main(url: str, username: str, password: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="KIRA Systemtest")
-    parser.add_argument("--url",  default=os.getenv("KIRA_URL",      "http://localhost:8000"))
-    parser.add_argument("--user", default=os.getenv("APP_USERNAME",  "admin"))
-    parser.add_argument("--pass", dest="pw",
-                        default=os.getenv("APP_PASSWORD", "geheim"))
+    parser.add_argument("--url", default=os.getenv("KIRA_URL", "http://localhost:8000"))
     args = parser.parse_args()
-    asyncio.run(main(args.url, args.user, args.pw))
+    asyncio.run(main(args.url))
