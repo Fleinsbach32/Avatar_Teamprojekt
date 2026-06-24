@@ -116,6 +116,26 @@ def test_chat_retries_then_succeeds(mock_client, mock_collection):
     assert mock_client.aio.models.generate_content_stream.call_count == 2
 
 
+@patch("app.routes.chat.CHAT_RETRY_DELAY", 0)
+@patch("app.rag.collection")
+@patch("app.gemini.client")
+def test_chat_last_attempt_uses_fallback_model(mock_client, mock_collection):
+    # Erste zwei Versuche scheitern (Primärmodell überlastet), dritter gelingt
+    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        side_effect=[RuntimeError("503"), RuntimeError("503"), make_async_stream(["Erfolg."])]
+    )
+
+    response = test_client.post("/chat", json={"message": "Test", "session_id": "s_fb"})
+
+    events = sse_events(response.text)
+    assert any(e["type"] == "done" for e in events)
+    calls = mock_client.aio.models.generate_content_stream.call_args_list
+    assert calls[0].kwargs["model"] == "gemini-2.5-flash"
+    assert calls[1].kwargs["model"] == "gemini-2.5-flash"
+    assert calls[2].kwargs["model"] == "gemini-2.5-flash-lite"   # Fallback
+
+
 @patch("app.rag.collection")
 @patch("app.gemini.client")
 def test_chat_history_stored(mock_client, mock_collection):
