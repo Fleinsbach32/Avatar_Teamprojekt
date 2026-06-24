@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.gemini import client, gemini_config, SSE_HEADERS
+from app.gemini import SSE_HEADERS, stream_gemini, GeminiUnavailable, GeminiMidStreamError
 from app.prompts import build_prompt
 from app.rag import build_rag_context
 from app.session import sessions, touch_session, remember_opening, opening_instruction
@@ -59,31 +59,11 @@ Frage: {request.message}"""
     async def event_stream():
         t1 = time.time()
         chat_parts = []
-        gesendet = False
-        fehler = False
-        for versuch in range(3):
-            fehler = False
-            try:
-                stream = await client.aio.models.generate_content_stream(
-                    model="gemini-2.5-flash",
-                    contents=prompt,
-                    config=gemini_config(400),
-                )
-                async for chunk in stream:
-                    if chunk.text:
-                        gesendet = True
-                        chat_parts.append(chunk.text)
-                        yield f'data: {json.dumps({"type": "chunk", "text": chunk.text})}\n\n'
-                break
-            except Exception as e:
-                logging.warning(f"/chat Gemini Fehler (Versuch {versuch + 1}): {e}")
-                fehler = True
-                if gesendet:
-                    break  # mitten im Stream → kein Retry
-                if versuch < 2:
-                    await asyncio.sleep(CHAT_RETRY_DELAY)
-
-        if fehler:
+        try:
+            async for text in stream_gemini(prompt, 400, CHAT_RETRY_DELAY):
+                chat_parts.append(text)
+                yield f'data: {json.dumps({"type": "chunk", "text": text})}\n\n'
+        except (GeminiUnavailable, GeminiMidStreamError):
             yield f'data: {json.dumps({"type": "error", "message": "Service momentan nicht verfügbar."})}\n\n'
             return
 

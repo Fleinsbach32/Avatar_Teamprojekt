@@ -91,7 +91,7 @@ def test_tavus_end_success(mock_http):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.tavus.client")
+@patch("app.gemini.client")
 def test_tavus_llm_streams_chunks(mock_client, mock_collection):
     mock_collection.query.return_value = {
         "documents": [["KIT Prüfungsanmeldung erfolgt über das Campus-Portal."]],
@@ -127,7 +127,7 @@ def test_tavus_llm_streams_chunks(mock_client, mock_collection):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.tavus.client")
+@patch("app.gemini.client")
 def test_tavus_llm_includes_conversation_history(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
@@ -149,7 +149,7 @@ def test_tavus_llm_includes_conversation_history(mock_client, mock_collection):
 
 @patch("app.routes.tavus.VOICE_RETRY_DELAY", 0)
 @patch("app.rag.collection")
-@patch("app.routes.tavus.client")
+@patch("app.gemini.client")
 def test_tavus_llm_fallback_after_failures(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(side_effect=RuntimeError("boom"))
@@ -165,7 +165,7 @@ def test_tavus_llm_fallback_after_failures(mock_client, mock_collection):
 
 @patch("app.routes.tavus.VOICE_RETRY_DELAY", 0)
 @patch("app.rag.collection")
-@patch("app.routes.tavus.client")
+@patch("app.gemini.client")
 def test_tavus_llm_no_retry_after_first_chunk(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
@@ -232,7 +232,7 @@ def test_tavus_message_timeout(mock_http):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.tavus.client")
+@patch("app.gemini.client")
 def test_tavus_llm_uses_kira_persona(mock_client, mock_collection):
     mock_collection.query.return_value = {
         "documents": [["KIT Prüfungsanmeldung über das Campus-Portal."]],
@@ -253,7 +253,7 @@ def test_tavus_llm_uses_kira_persona(mock_client, mock_collection):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.tavus.client")
+@patch("app.gemini.client")
 def test_tavus_llm_context_limit_600(mock_client, mock_collection):
     long_doc = "A" * 700
     mock_collection.query.return_value = {"documents": [[long_doc]], "distances": [[0.3]]}
@@ -284,7 +284,7 @@ def test_tavus_settings_updates_prefs():
 
 
 @patch("app.rag.collection")
-@patch("app.routes.tavus.client")
+@patch("app.gemini.client")
 def test_tavus_llm_uses_voice_prefs(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
@@ -308,7 +308,7 @@ def test_tavus_llm_uses_voice_prefs(mock_client, mock_collection):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.tavus.client")
+@patch("app.gemini.client")
 def test_chat_completions_alias(mock_client, mock_collection):
     """Tavus' OpenAI-Client ruft /chat/completions (an die ngrok-Root) auf."""
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
@@ -342,7 +342,7 @@ def test_tts_normalize_urls():
 
 
 @patch("app.rag.collection")
-@patch("app.routes.tavus.client")
+@patch("app.gemini.client")
 def test_tavus_llm_buffers_into_sentences(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     # Tokenweises Streaming, das Satzgrenzen kreuzt

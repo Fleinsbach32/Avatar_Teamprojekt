@@ -39,7 +39,7 @@ def sse_events(body: str):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.chat.client")
+@patch("app.gemini.client")
 def test_chat_streams_chunks_then_done(mock_client, mock_collection):
     mock_collection.query.return_value = {
         "documents": [["KIT Bewerbungsfrist 15. Juli."]],
@@ -66,7 +66,7 @@ def test_chat_streams_chunks_then_done(mock_client, mock_collection):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.chat.client")
+@patch("app.gemini.client")
 def test_chat_single_call_with_context(mock_client, mock_collection):
     mock_collection.query.return_value = {
         "documents": [["EINDEUTIGER_KONTEXT_42"]],
@@ -87,7 +87,7 @@ def test_chat_single_call_with_context(mock_client, mock_collection):
 
 @patch("app.routes.chat.CHAT_RETRY_DELAY", 0)
 @patch("app.rag.collection")
-@patch("app.routes.chat.client")
+@patch("app.gemini.client")
 def test_chat_error_event_on_stream_failure(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(side_effect=RuntimeError("boom"))
@@ -102,7 +102,7 @@ def test_chat_error_event_on_stream_failure(mock_client, mock_collection):
 
 @patch("app.routes.chat.CHAT_RETRY_DELAY", 0)
 @patch("app.rag.collection")
-@patch("app.routes.chat.client")
+@patch("app.gemini.client")
 def test_chat_retries_then_succeeds(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
@@ -117,7 +117,7 @@ def test_chat_retries_then_succeeds(mock_client, mock_collection):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.chat.client")
+@patch("app.gemini.client")
 def test_chat_history_stored(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
@@ -132,7 +132,7 @@ def test_chat_history_stored(mock_client, mock_collection):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.chat.client")
+@patch("app.gemini.client")
 def test_chat_second_request_varies_opening(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
@@ -147,7 +147,7 @@ def test_chat_second_request_varies_opening(mock_client, mock_collection):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.chat.client")
+@patch("app.gemini.client")
 def test_chat_sse_headers_prevent_proxy_buffering(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
@@ -161,7 +161,7 @@ def test_chat_sse_headers_prevent_proxy_buffering(mock_client, mock_collection):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.chat.client")
+@patch("app.gemini.client")
 def test_chat_midstream_failure_no_done_no_history(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
@@ -178,7 +178,7 @@ def test_chat_midstream_failure_no_done_no_history(mock_client, mock_collection)
 
 
 @patch("app.rag.collection")
-@patch("app.routes.chat.client")
+@patch("app.gemini.client")
 def test_chat_lang_en_uses_english_prompt(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
@@ -192,7 +192,7 @@ def test_chat_lang_en_uses_english_prompt(mock_client, mock_collection):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.chat.client")
+@patch("app.gemini.client")
 def test_chat_studiengang_passes_filter_to_rag(mock_client, mock_collection):
     mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
     mock_client.aio.models.generate_content_stream = AsyncMock(
@@ -213,7 +213,7 @@ def test_chat_studiengang_passes_filter_to_rag(mock_client, mock_collection):
 
 
 @patch("app.rag.collection")
-@patch("app.routes.chat.client")
+@patch("app.gemini.client")
 def test_chat_uses_kira_persona(mock_client, mock_collection):
     mock_collection.query.return_value = {
         "documents": [["KIT Bewerbungsfrist 15. Juli."]],
@@ -236,7 +236,7 @@ def test_chat_message_too_long_rejected():
 
 
 @patch("app.rag.collection")
-@patch("app.routes.chat.client")
+@patch("app.gemini.client")
 def test_chat_context_limit_600(mock_client, mock_collection):
     long_doc = "B" * 700
     mock_collection.query.return_value = {"documents": [[long_doc]], "distances": [[0.3]]}

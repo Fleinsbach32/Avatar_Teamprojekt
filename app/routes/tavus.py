@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
-from app.gemini import client, gemini_config, SSE_HEADERS
+from app.gemini import SSE_HEADERS, stream_gemini, GeminiUnavailable, GeminiMidStreamError
 from app.prompts import build_prompt, VOICE_CONTEXT
 from app.rag import build_rag_context
 
@@ -224,30 +224,20 @@ Frage: {user_message}"""
     async def stream_answer():
         gesendet = False
         buffer = ""
-        for versuch in range(3):
-            try:
-                stream = await client.aio.models.generate_content_stream(
-                    model="gemini-2.5-flash",
-                    contents=prompt,
-                    config=gemini_config(300),
-                )
-                async for chunk in stream:
-                    if chunk.text:
-                        gesendet = True
-                        buffer += chunk.text
-                        deltas, buffer = _flush_sentences(buffer)
-                        for d in deltas:
-                            yield f'data: {json.dumps({"choices": [{"delta": {"content": d}, "finish_reason": None}]})}\n\n'
-                break
-            except Exception as e:
-                logging.warning(f"tavus/llm Gemini Fehler (Versuch {versuch + 1}): {e}")
-                if gesendet:
-                    break
-                if versuch < 2:
-                    await asyncio.sleep(VOICE_RETRY_DELAY)
+        try:
+            async for text in stream_gemini(prompt, 300, VOICE_RETRY_DELAY):
+                gesendet = True
+                buffer += text
+                deltas, buffer = _flush_sentences(buffer)
+                for d in deltas:
+                    yield f'data: {json.dumps({"choices": [{"delta": {"content": d}, "finish_reason": None}]})}\n\n'
+        except GeminiMidStreamError:
+            pass  # bereits gesendete Sätze stehen; Rest wird unten geflusht
+        except GeminiUnavailable:
+            gesendet = False
         if gesendet:
             # Restpuffer (letzter Satz ohne abschließendes Whitespace) ausgeben
-            deltas, buffer = _flush_sentences(buffer, final=True)
+            deltas, _ = _flush_sentences(buffer, final=True)
             for d in deltas:
                 yield f'data: {json.dumps({"choices": [{"delta": {"content": d}, "finish_reason": None}]})}\n\n'
         else:
