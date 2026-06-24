@@ -100,3 +100,41 @@ async def run(with_llm: bool) -> dict:
         "aggregate": _aggregate(records),
         "records": records,
     }
+
+
+def _print(summary: dict) -> None:
+    agg = summary["aggregate"]
+    mode = "RAG + Gemini" if summary["with_llm"] else "nur RAG (--no-llm)"
+    print(f"\n{'='*64}")
+    print(f"  Latenz-Benchmark — {summary['questions']} Fragen — {mode}")
+    print(f"{'='*64}")
+    print(f"  {'Phase':<10}  {'Median':>10}  {'Ø':>10}")
+    for phase in PHASES:
+        print(f"  {phase:<10}  {agg[phase]['median']:>9.1f}ms  {agg[phase]['mean']:>9.1f}ms")
+    if summary["with_llm"]:
+        rag = agg["rag_ms"]["median"]
+        gen = agg["gen_ms"]["median"]
+        dominant = "RAG" if rag > gen else "Gemini-Generierung"
+        print(f"\n  Dominanter Anteil (Median): {dominant}  "
+              f"(RAG {rag:.0f}ms vs Generierung {gen:.0f}ms)")
+    print()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="KIRA Latenz-Benchmark")
+    parser.add_argument("--no-llm", action="store_true", help="Nur RAG messen (offline)")
+    parser.add_argument("--save", help="Ergebnis als JSON speichern")
+    args = parser.parse_args()
+
+    summary = asyncio.run(run(with_llm=not args.no_llm))
+    _print(summary)
+
+    if args.save:
+        Path(args.save).write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        print(f"  Gespeichert: {args.save}\n")
+
+
+if __name__ == "__main__":
+    main()
