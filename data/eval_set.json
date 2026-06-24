@@ -1,0 +1,22 @@
+[
+  {"question": "Wie viele ECTS hat das Modul Mathematik 1?", "lang": "de", "studiengang": "wing_bsc", "expected_facts": ["Mathematik 1"]},
+  {"question": "Was ist das Modul Controlling?", "lang": "de", "studiengang": "wing_bsc", "expected_facts": ["Controlling"]},
+  {"question": "Was ist das Modul Finanzierung und Rechnungswesen?", "lang": "de", "studiengang": "wing_bsc", "expected_facts": ["Finanzierung"]},
+  {"question": "Was ist die Modulnummer von Berufspraktikum?", "lang": "de", "studiengang": "wing_bsc", "expected_facts": ["Berufspraktikum"]},
+  {"question": "M-WIWI-101430", "lang": "de", "studiengang": "winfo_bsc", "expected_facts": ["Angewandte Informatik"]},
+  {"question": "Was ist das Modul Strategie und Organisation?", "lang": "de", "studiengang": "wing_bsc", "expected_facts": ["Strategie"]},
+  {"question": "Was ist das Modul Essentials of Finance?", "lang": "de", "studiengang": "wing_bsc", "expected_facts": ["Finance"]},
+  {"question": "Welche Pflichtmodule hat der WING Bachelor?", "lang": "de", "studiengang": "wing_bsc", "expected_facts": ["Modul"]},
+  {"question": "Wie melde ich mich für Prüfungen an?", "lang": "de", "studiengang": null, "expected_facts": ["Prüfung"]},
+  {"question": "Wann ist die Bewerbungsfrist für das Wintersemester?", "lang": "de", "studiengang": null, "expected_facts": ["Bewerbung"]},
+  {"question": "Wie beantrage ich ein Urlaubssemester?", "lang": "de", "studiengang": null, "expected_facts": ["Urlaubssemester"]},
+  {"question": "Was ist ein NC und wie wird er berechnet?", "lang": "de", "studiengang": null, "expected_facts": ["NC"]},
+  {"question": "Gibt es eine Mensa am KIT?", "lang": "de", "studiengang": null, "expected_facts": ["Mensa"]},
+  {"question": "Wie funktioniert ein Auslandssemester über Erasmus?", "lang": "de", "studiengang": null, "expected_facts": ["Erasmus"]},
+  {"question": "Was macht die Fachschaft WiWi?", "lang": "de", "studiengang": null, "expected_facts": ["Fachschaft"]},
+  {"question": "Wo finde ich Studienberatung am KIT?", "lang": "de", "studiengang": null, "expected_facts": ["Beratung"]},
+  {"question": "Wie oft darf ich eine Klausur wiederholen?", "lang": "de", "studiengang": null, "expected_facts": ["Wiederholung"]},
+  {"question": "Was ist die Orientierungsprüfung?", "lang": "de", "studiengang": "wing_bsc", "expected_facts": ["Orientierung"]},
+  {"question": "Welche Module gibt es im WINFO Master?", "lang": "de", "studiengang": "winfo_msc", "expected_facts": ["Modul"]},
+  {"question": "Was ist das Modul Introduction to Digital Economics?", "lang": "de", "studiengang": "digieco_bsc", "expected_facts": ["Digital Economics"]}
+]
