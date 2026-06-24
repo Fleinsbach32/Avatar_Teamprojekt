@@ -96,8 +96,8 @@ def test_build_rag_context_general_fallback():
             from app.rag import build_rag_context
             _, anweisung, distanz = build_rag_context("Testfrage")
     assert distanz == 0.9
-    assert "campus.kit.edu" in anweisung          # Tier-3: Verweis bei Unsicherheit
-    assert "allgemeinen Wissen" in anweisung      # Tier-3: Kennzeichnungspflicht
+    assert "campus.kit.edu" in anweisung          # Tier-3: Verweis bei echter Unsicherheit
+    assert "wirklich nicht sicher" in anweisung   # nur dann ehrlich zugeben
 
 def test_build_rag_context_truncates_docs_at_600():
     with patch("app.rag.collection") as mock_collection:
@@ -148,8 +148,9 @@ def test_rag_fallback_no_disclaiming():
         }
         from app.rag import build_rag_context
         _, anweisung, _ = build_rag_context("Testfrage")
-    assert "kennzeichne" in anweisung.lower()     # Kennzeichnungspflicht für allgemeines Wissen
-    assert "campus.kit.edu" in anweisung          # Verweis bei Unsicherheit
+    # Keine erzwungene "Nach meinem allgemeinen Wissen"-Floskel
+    assert "Nach meinem allgemeinen Wissen" not in anweisung
+    assert "campus.kit.edu" in anweisung          # Verweis nur bei echter Unsicherheit
 
 
 # ── TP2: Modul-ID + Studiengang $or-Filter ────────────────
@@ -345,14 +346,18 @@ def test_context_quality_hint_high_confidence():
 
 def test_context_quality_hint_medium_confidence():
     hint = context_quality_hint(0.55)
-    assert "kennzeichne" in hint.lower() or "Kennzeichne" in hint
-    assert "allgemeinen Wissen" in hint or "allgemeines" in hint.lower()
+    assert "lückenhaft" in hint.lower()
+    assert "ergänze" in hint.lower()
+    # Keine erzwungene Kennzeichnungs-Floskel
+    assert "Nach meinem allgemeinen Wissen" not in hint
 
 
 def test_context_quality_hint_low_confidence():
     hint = context_quality_hint(0.70)
     assert "campus.kit.edu" in hint
-    assert "allgemeinen Wissen" in hint or "allgemeinem" in hint.lower()
+    assert "wirklich nicht sicher" in hint
+    # Floskel nur bei echter Unsicherheit, nicht als Pflicht-Label
+    assert "Nach meinem allgemeinen Wissen" not in hint
 
 
 def test_context_quality_hint_thresholds():
@@ -362,4 +367,5 @@ def test_context_quality_hint_thresholds():
 
 def test_base_prompt_has_grounding_hierarchy():
     assert "primäre Quelle" in KIRA_BASE_PROMPT
-    assert "Nach meinem allgemeinen Wissen" in KIRA_BASE_PROMPT
+    # Keine erzwungene Kennzeichnungs-Floskel im Base-Prompt
+    assert "Nach meinem allgemeinen Wissen" not in KIRA_BASE_PROMPT
