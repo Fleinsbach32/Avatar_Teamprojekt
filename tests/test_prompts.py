@@ -330,3 +330,30 @@ def test_prompts_have_empathy_marker_en():
     for mode in ("text", "voice"):
         p = build_prompt(mode, "en").lower()
         assert "encourag" in p, f"EN {mode}-Prompt sollte ermutigenden Ton enthalten"
+
+
+# ── context_quality_hint ──────────────────────────────────
+from app.prompts import context_quality_hint
+
+
+def test_context_quality_hint_high_confidence():
+    hint = context_quality_hint(0.10)
+    assert "KIT-Wissensdatenbank" in hint
+    assert "ungesichertes" in hint
+
+
+def test_context_quality_hint_medium_confidence():
+    hint = context_quality_hint(0.55)
+    assert "kennzeichne" in hint.lower() or "Kennzeichne" in hint
+    assert "allgemeinen Wissen" in hint or "allgemeines" in hint.lower()
+
+
+def test_context_quality_hint_low_confidence():
+    hint = context_quality_hint(0.70)
+    assert "campus.kit.edu" in hint
+    assert "allgemeinen Wissen" in hint or "allgemeinem" in hint.lower()
+
+
+def test_context_quality_hint_thresholds():
+    assert context_quality_hint(0.44) != context_quality_hint(0.45)
+    assert context_quality_hint(0.64) != context_quality_hint(0.65)

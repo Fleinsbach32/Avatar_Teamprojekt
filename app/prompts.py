@@ -97,6 +97,32 @@ VOICE_CONTEXT: dict[str, str] = {
 }
 
 
+def context_quality_hint(distanz: float) -> str:
+    """Dreistufige Grounding-Anweisung basierend auf Embedding-Distanz.
+
+    d < 0.45  → Kontext sicher: nur aus DB antworten.
+    0.45–0.65 → Kontext lückenhaft: DB bevorzugen, allgemeines Wissen kennzeichnen.
+    d ≥ 0.65  → Kein ausreichender Kontext: allgemeines Wissen + Kennzeichnung.
+    """
+    if distanz < 0.45:
+        return (
+            "Der folgende Kontext aus der KIT-Wissensdatenbank ist sehr relevant. "
+            "Beantworte die Frage auf Basis dieses Kontexts — "
+            "füge kein ungesichertes allgemeines Wissen hinzu."
+        )
+    if distanz < 0.65:
+        return (
+            "Der folgende Kontext ist vorhanden, aber möglicherweise nicht vollständig passend. "
+            "Nutze ihn, wo er relevant ist. Wo er lückenhaft ist, darfst du allgemeines "
+            "KIT-Wissen ergänzen — kennzeichne es dann mit 'Nach meinem allgemeinen Wissen …'."
+        )
+    return (
+        "Kein ausreichend passender Kontext gefunden. Beantworte die Frage aus allgemeinem "
+        "KIT-Wissen — kennzeichne es mit 'Nach meinem allgemeinen Wissen …'. "
+        "Wenn du die Antwort nicht sicher kennst, gib das ehrlich zu und empfehle campus.kit.edu."
+    )
+
+
 @functools.lru_cache(maxsize=4)
 def build_prompt(mode: Literal["text", "voice"], lang: str = "de") -> str:
     ext_map = KIRA_TEXT_EXT if mode == "text" else KIRA_VOICE_EXT
