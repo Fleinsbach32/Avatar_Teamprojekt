@@ -8,6 +8,7 @@ Aufruf:
 Kein Server nötig. Schnell: lädt KEIN Embedding-Modell.
 """
 import argparse
+import statistics
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -67,6 +68,50 @@ def load_all_metadatas(col) -> list[dict]:
         if len(fetched) < batch_size:
             break
     return result
+
+
+def hygiene_report(col) -> None:
+    """Streamt alle Dokumente und meldet Datenhygiene: U+FFFD-Quote,
+    Duplikatrate (per Inhalts-Hash), Chunk-Längen."""
+    import hashlib
+    batch_size = 5000
+    offset = 0
+    total = 0
+    fffd_chunks = 0
+    short_chunks = 0
+    lengths: list[int] = []
+    seen: dict[str, int] = {}
+    while True:
+        batch = col.get(limit=batch_size, offset=offset, include=["documents"])
+        docs = batch.get("documents") or []
+        if not docs:
+            break
+        for doc in docs:
+            doc = doc or ""
+            total += 1
+            if "�" in doc:
+                fffd_chunks += 1
+            n_words = len(doc.split())
+            lengths.append(n_words)
+            if n_words < 8:
+                short_chunks += 1
+            h = hashlib.md5(doc.strip().lower().encode("utf-8")).hexdigest()
+            seen[h] = seen.get(h, 0) + 1
+        offset += len(docs)
+        if len(docs) < batch_size:
+            break
+
+    if total == 0:
+        return
+    duplicates = sum(c - 1 for c in seen.values() if c > 1)
+    line()
+    print("  HYGIENE")
+    line()
+    print(f"  Chunks mit U+FFFD:   {fffd_chunks:>7,}  ({fffd_chunks / total:.1%})")
+    print(f"  Duplikat-Chunks:     {duplicates:>7,}  ({duplicates / total:.1%})")
+    print(f"  Sehr kurze (<8 W.):  {short_chunks:>7,}  ({short_chunks / total:.1%})")
+    print(f"  Chunk-Länge Wörter:  Ø {statistics.mean(lengths):.0f}  |  Median {statistics.median(lengths):.0f}")
+    print()
 
 
 def main():
@@ -197,6 +242,7 @@ def main():
     else:
         print("  WARNUNG: Daten fehlen — fill_db.py erneut ausfuehren.")
 
+    hygiene_report(col)
     line("=")
     typen_str = " + ".join(
         f"{len(v):,} {DOC_TYPE_LABELS.get(k, k)}"
