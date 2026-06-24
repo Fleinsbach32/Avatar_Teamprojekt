@@ -125,3 +125,26 @@ def test_extract_text_html_drops_div_navigation():
     assert "Über uns" not in text
     assert "Cookies" not in text
     assert "Impressum" not in text
+
+
+# ── Qualitätsfilter + Dedup ───────────────────────────────
+def test_is_low_quality_chunk_rejects_short_and_fffd():
+    assert crawler._is_low_quality_chunk("Zu kurz hier.")            # < 8 Wörter
+    assert crawler._is_low_quality_chunk("Text mit � Loch drin hier weiter mehr")  # U+FFFD
+    assert not crawler._is_low_quality_chunk(
+        "Die Bewerbungsfrist für das Wintersemester endet jedes Jahr am fünfzehnten Juli."
+    )
+
+
+def test_is_low_quality_chunk_rejects_symbol_soup():
+    # Überwiegend Nicht-Wort-Tokens (Navigation/Symbole)
+    assert crawler._is_low_quality_chunk("» | › • — / \\ > < — » Home | Kontakt | Impressum | A")
+
+
+def test_clean_chunks_dedups_identical_content():
+    seen = set()
+    text = "Die Bewerbungsfrist endet am fünfzehnten Juli jedes Jahr im Sommer regelmäßig. " * 10
+    first = crawler.clean_chunks(text, seen)
+    second = crawler.clean_chunks(text, seen)   # gleiche Inhalte → bereits gesehen
+    assert first              # erster Lauf liefert Chunks
+    assert second == []       # zweiter Lauf komplett dedupliziert

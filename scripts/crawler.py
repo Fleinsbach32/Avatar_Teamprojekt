@@ -373,6 +373,41 @@ def chunk_text(text: str, chunk_tokens: int = CHUNK_SIZE_TOKENS, overlap_tokens:
 
     return [c for c in chunks if len(c.strip()) >= 50]
 
+
+MIN_CHUNK_WORDS = 8
+
+
+def _content_hash(text: str) -> str:
+    """Stabiler Hash des normalisierten, kleingeschriebenen Texts (für Dedup)."""
+    return hashlib.md5(_normalize_text(text).lower().encode("utf-8")).hexdigest()
+
+
+def _is_low_quality_chunk(text: str) -> bool:
+    """True, wenn der Chunk verworfen werden soll: U+FFFD-Reste, zu kurz oder
+    überwiegend Nicht-Wort-Tokens (Navigation/Symbolmüll)."""
+    if "�" in text:
+        return True
+    words = text.split()
+    if len(words) < MIN_CHUNK_WORDS:
+        return True
+    alpha_words = [w for w in words if sum(c.isalpha() for c in w) >= 2]
+    return len(alpha_words) / len(words) < 0.6
+
+
+def clean_chunks(text: str, seen_hashes: set) -> list[str]:
+    """Normalisiert Text, chunkt ihn, verwirft Low-Quality-Chunks und dedupliziert
+    gegen seen_hashes (über den gesamten Lauf). Mutiert seen_hashes."""
+    out: list[str] = []
+    for chunk in chunk_text(_normalize_text(text)):
+        if _is_low_quality_chunk(chunk):
+            continue
+        h = _content_hash(chunk)
+        if h in seen_hashes:
+            continue
+        seen_hashes.add(h)
+        out.append(chunk)
+    return out
+
 # ---------------------------------------------------------------------------
 # ChromaDB helpers
 # ---------------------------------------------------------------------------
