@@ -357,3 +357,8 @@ def test_context_quality_hint_low_confidence():
 def test_context_quality_hint_thresholds():
     assert context_quality_hint(0.44) != context_quality_hint(0.45)
     assert context_quality_hint(0.64) != context_quality_hint(0.65)
+
+
+def test_base_prompt_has_grounding_hierarchy():
+    assert "primäre Quelle" in KIRA_BASE_PROMPT
+    assert "Nach meinem allgemeinen Wissen" in KIRA_BASE_PROMPT
