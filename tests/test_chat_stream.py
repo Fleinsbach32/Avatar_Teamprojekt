@@ -136,6 +136,29 @@ def test_chat_last_attempt_uses_fallback_model(mock_client, mock_collection):
     assert calls[2].kwargs["model"] == "gemini-2.5-flash-lite"   # Fallback
 
 
+def test_stream_gemini_explicit_model_overrides_all_attempts():
+    import asyncio
+    import app.gemini as gemini
+
+    async def drive():
+        out = []
+        async for t in gemini.stream_gemini("p", 100, 0, model="gemini-2.5-flash-lite"):
+            out.append(t)
+        return out
+
+    with patch("app.gemini.client") as mock_client:
+        # Erster Versuch scheitert, zweiter gelingt — beide müssen flash-lite nutzen
+        mock_client.aio.models.generate_content_stream = AsyncMock(
+            side_effect=[RuntimeError("503"), make_async_stream(["ok"])]
+        )
+        result = asyncio.run(drive())
+
+    assert result == ["ok"]
+    calls = mock_client.aio.models.generate_content_stream.call_args_list
+    assert calls, "stream_gemini hat generate_content_stream nicht aufgerufen"
+    assert all(c.kwargs["model"] == "gemini-2.5-flash-lite" for c in calls)
+
+
 @patch("app.rag.collection")
 @patch("app.gemini.client")
 def test_chat_history_stored(mock_client, mock_collection):

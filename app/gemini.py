@@ -30,22 +30,26 @@ class GeminiMidStreamError(Exception):
     """Der Stream brach ab, nachdem bereits Chunks gesendet wurden (kein Retry)."""
 
 
-async def stream_gemini(prompt: str, max_tokens: int, retry_delay: float, attempts: int = 3):
+async def stream_gemini(prompt: str, max_tokens: int, retry_delay: float, attempts: int = 3, model: str | None = None):
     """Async-Generator: liefert Text-Chunks von Gemini.
 
     Retry nur VOR dem ersten Chunk (bis zu `attempts` Versuche) mit exponentiellem
-    Backoff (`retry_delay`, dann ×2, ×4 …). Der letzte Versuch nutzt das Fallback-
-    Modell, falls das Primärmodell überlastet ist (503 UNAVAILABLE).
+    Backoff (`retry_delay`, dann ×2, ×4 …). Ohne explizites `model` nutzt der letzte
+    Versuch das Fallback-Modell, falls das Primärmodell überlastet ist (503). Wird
+    `model` gesetzt, nutzen ALLE Versuche dieses Modell (für Benchmarks/Tests).
     - Scheitert es vor dem ersten Chunk endgültig → raise GeminiUnavailable.
     - Scheitert es nach bereits gesendeten Chunks → raise GeminiMidStreamError (kein Retry).
     """
     gesendet = False
     for versuch in range(attempts):
-        # Letzter Versuch weicht auf das Fallback-Modell aus.
-        model = FALLBACK_MODEL if versuch == attempts - 1 else PRIMARY_MODEL
+        # Explizites Modell überschreibt die Primär/Fallback-Logik.
+        if model is not None:
+            used_model = model
+        else:
+            used_model = FALLBACK_MODEL if versuch == attempts - 1 else PRIMARY_MODEL
         try:
             stream = await client.aio.models.generate_content_stream(
-                model=model,
+                model=used_model,
                 contents=prompt,
                 config=gemini_config(max_tokens),
             )
@@ -55,7 +59,7 @@ async def stream_gemini(prompt: str, max_tokens: int, retry_delay: float, attemp
                     yield chunk.text
             return
         except Exception as e:
-            logging.warning(f"Gemini Stream Fehler (Modell {model}, Versuch {versuch + 1}): {e}")
+            logging.warning(f"Gemini Stream Fehler (Modell {used_model}, Versuch {versuch + 1}): {e}")
             if gesendet:
                 raise GeminiMidStreamError() from e
             if versuch < attempts - 1:
