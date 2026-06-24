@@ -9,3 +9,6 @@ crawled_data/
 .superpowers/
 tests/__pycache__/
 .pip-stamp
+# Lokale Benchmark-/Eval-Baselines (nicht versionieren)
+bench_*.json
+eval_baseline.json

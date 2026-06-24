@@ -1,0 +1,12 @@
+# Zeilenenden normalisieren: im Repo immer LF, beendet die LF->CRLF-Warnungen
+# bei jedem Commit unter Windows.
+* text=auto eol=lf
+
+# Binärdateien unangetastet lassen
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
