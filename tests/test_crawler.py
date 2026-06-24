@@ -148,3 +148,12 @@ def test_clean_chunks_dedups_identical_content():
     second = crawler.clean_chunks(text, seen)   # gleiche Inhalte → bereits gesehen
     assert first              # erster Lauf liefert Chunks
     assert second == []       # zweiter Lauf komplett dedupliziert
+
+
+def test_clean_chunks_shared_seen_set_across_pages():
+    # Zwei "Seiten" mit identischem Inhalt → zweite trägt nichts mehr bei
+    seen = set()
+    page = "Das Studienbüro hilft bei Fragen zu Anmeldung Prüfung und Fristen jederzeit gern. " * 8
+    a = crawler.clean_chunks(page, seen)
+    b = crawler.clean_chunks(page, seen)
+    assert a and not b

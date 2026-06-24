@@ -542,6 +542,7 @@ def crawl(
         "chunks_stored": 0,
         "pdfs_processed": 0,
     }
+    seen_chunk_hashes: set = set()
 
     while queue and stats["crawled"] < max_pages:
         url, depth = queue.popleft()
@@ -708,6 +709,7 @@ def crawl(
                         queue.append((abs_url, depth + 1))
 
         # ── Build JSON record ─────────────────────────────────────────────────
+        extracted_text = _normalize_text(extracted_text)
         language = detect_language(extracted_text)
         content_type_label = classify_content(url, extracted_text)
         word_count = len(extracted_text.split())
@@ -733,7 +735,7 @@ def crawl(
         # ── ChromaDB ingestion ────────────────────────────────────────────────
         if collection is not None and model is not None:
             if not url_already_indexed(collection, url):
-                chunks = chunk_text(extracted_text)
+                chunks = clean_chunks(extracted_text, seen_chunk_hashes)
                 meta_base = {
                     "source_url": url,
                     "page_title": page_title,
@@ -937,6 +939,7 @@ def fill_db_from_crawled(output_dir: Path, chroma_dir: str) -> int:
     _, collection = get_or_create_collection(chroma_dir)
 
     total_inserted = 0
+    seen_chunk_hashes: set = set()
     for path in json_files:
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
@@ -965,7 +968,7 @@ def fill_db_from_crawled(output_dir: Path, chroma_dir: str) -> int:
             "language": record.get("metadata", {}).get("language", "de"),
             "program": "all",
         }
-        chunks = chunk_text(text)
+        chunks = clean_chunks(text, seen_chunk_hashes)
         n = store_chunks(collection, model, chunks, meta_base)
         total_inserted += n
         logger.info("Indexed %s — %d chunks", url, n)
