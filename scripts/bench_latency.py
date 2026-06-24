@@ -51,8 +51,9 @@ async def measure_one(question: str, studiengang, with_llm: bool) -> dict:
 
     ttft_ms = gen_ms = None
     e2e_ms = rag_ms
+    ok = True
     if with_llm:
-        from app.gemini import stream_gemini
+        from app.gemini import stream_gemini, GeminiUnavailable, GeminiMidStreamError
         from app.prompts import build_prompt
 
         prompt = f"""{build_prompt("text", "de")}
@@ -65,19 +66,26 @@ Kontext:
 Frage: {question}"""
         t1 = time.perf_counter()
         first = None
-        async for chunk in stream_gemini(prompt, 400, 0):
-            if first is None:
-                first = time.perf_counter()
-            _ = chunk
-        last = time.perf_counter()
-        if first is not None:
-            ttft_ms = (first - t1) * 1000
-        gen_ms = (last - t1) * 1000
-        e2e_ms = rag_ms + gen_ms
+        try:
+            async for chunk in stream_gemini(prompt, 400, 0):
+                if first is None:
+                    first = time.perf_counter()
+                _ = chunk
+        except (GeminiUnavailable, GeminiMidStreamError):
+            # Gemini-Ausfall (z.B. 503): Frage als fehlgeschlagen vermerken,
+            # Benchmark läuft weiter statt zu crashen.
+            ok = False
+        if ok:
+            last = time.perf_counter()
+            if first is not None:
+                ttft_ms = (first - t1) * 1000
+            gen_ms = (last - t1) * 1000
+            e2e_ms = rag_ms + gen_ms
 
     return {
         "question": question,
         "studiengang": studiengang,
+        "ok": ok,
         "rag_ms": round(rag_ms, 1),
         "ttft_ms": round(ttft_ms, 1) if ttft_ms is not None else None,
         "gen_ms": round(gen_ms, 1) if gen_ms is not None else None,
@@ -97,6 +105,7 @@ async def run(with_llm: bool) -> dict:
     return {
         "with_llm": with_llm,
         "questions": len(records),
+        "failed": sum(1 for r in records if not r.get("ok", True)),
         "aggregate": _aggregate(records),
         "records": records,
     }
@@ -107,6 +116,9 @@ def _print(summary: dict) -> None:
     mode = "RAG + Gemini" if summary["with_llm"] else "nur RAG (--no-llm)"
     print(f"\n{'='*64}")
     print(f"  Latenz-Benchmark — {summary['questions']} Fragen — {mode}")
+    failed = summary.get("failed", 0)
+    if failed:
+        print(f"  ⚠ {failed} Frage(n) fehlgeschlagen (Gemini-Ausfall, z.B. 503) — nicht in Median/Ø")
     print(f"{'='*64}")
     print(f"  {'Phase':<10}  {'Median':>10}  {'Ø':>10}")
     for phase in PHASES:
