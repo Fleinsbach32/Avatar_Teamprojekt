@@ -14,6 +14,7 @@ import json
 import logging
 import re
 import time
+import unicodedata
 import urllib.robotparser
 from collections import deque
 from datetime import datetime, timezone
@@ -292,6 +293,18 @@ def extract_text_pdf(content: bytes) -> str:
 # ---------------------------------------------------------------------------
 # Chunking
 # ---------------------------------------------------------------------------
+
+def _normalize_text(text: str) -> str:
+    """Unicode-Normalisierung: NFC, Soft-Hyphen (U+00AD) entfernen, NBSP→Space,
+    Steuerzeichen entfernen, Whitespace kollabieren."""
+    text = unicodedata.normalize("NFC", text)
+    text = text.replace("\xad", "").replace("\xa0", " ")
+    text = "".join(
+        ch for ch in text
+        if ch in "\t\n\r " or unicodedata.category(ch)[0] != "C"
+    )
+    return re.sub(r"\s+", " ", text).strip()
+
 
 def _split_sentences(text: str) -> list[str]:
     """Naive sentence splitter that handles German/English text."""

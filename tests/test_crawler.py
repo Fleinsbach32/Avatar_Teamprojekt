@@ -73,3 +73,18 @@ def test_chunk_text_produces_nonempty_chunks():
     chunks = crawler.chunk_text("Das ist ein Satz. " * 200, chunk_tokens=50, overlap_tokens=10)
     assert chunks
     assert all(len(c.strip()) >= 50 for c in chunks)
+
+
+# ── _normalize_text ───────────────────────────────────────
+def test_normalize_text_removes_soft_hyphen_and_nbsp():
+    raw = "Fakult\xadät\xa0der\xa0Wirtschaft"
+    assert crawler._normalize_text(raw) == "Fakultät der Wirtschaft"
+
+
+def test_normalize_text_collapses_whitespace():
+    assert crawler._normalize_text("a   b\n\nc\t d") == "a b c d"
+
+
+def test_normalize_text_strips_control_chars():
+    # \x00 und \x07 werden entfernt (kein Space-Ersatz)
+    assert crawler._normalize_text("Text\x00mit\x07Steuerzeichen") == "TextmitSteuerzeichen"
