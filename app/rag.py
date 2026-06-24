@@ -90,34 +90,32 @@ _ECTS_Q_RE = re.compile(
 )
 
 
+def _extract_module_name(regex: re.Pattern, query: str, min_len: int = 1) -> str | None:
+    """Extrahiert den Modulnamen aus group(1) des Treffers, strippt Anführungszeichen
+    und verwirft zu kurze Namen (< min_len)."""
+    m = regex.search(query)
+    if not m:
+        return None
+    name = m.group(1).strip().strip('"\'')
+    return name if len(name) >= min_len else None
+
+
 def _module_name_from_number_question(query: str) -> str | None:
     """Erkennt Fragen wie 'Wie lautet die Modulnummer von <Name>?' und gibt
-    <Name> zurück. So kann die semantische Suche mit dem Modulnamen laufen statt
-    mit der Füllfrage (deren Embedding sonst das falsche Modul trifft)."""
-    m = _NUMBER_Q_RE.search(query)
-    if m:
-        name = m.group(1).strip().strip('"\'')
-        return name or None
-    return None
+    <Name> zurück. So kann die Suche mit dem Modulnamen laufen statt mit der
+    Füllfrage (deren Embedding sonst das falsche Modul trifft)."""
+    return _extract_module_name(_NUMBER_Q_RE, query, min_len=1)
 
 
 def _module_name_from_what_is_question(query: str) -> str | None:
     """Erkennt 'Was ist das Modul X?' und gibt den Modulnamen X zurück."""
-    m = _WHAT_IS_MODULE_RE.search(query)
-    if m:
-        name = m.group(1).strip().strip('"\'')
-        return name if len(name) >= 3 else None
-    return None
+    return _extract_module_name(_WHAT_IS_MODULE_RE, query, min_len=3)
 
 
 def _module_name_from_ects_question(query: str) -> str | None:
     """Erkennt 'Wie viele ECTS hat das Modul X?' und gibt X zurück, damit die
     Frage über den Modulindex statt unzuverlässig semantisch beantwortet wird."""
-    m = _ECTS_Q_RE.search(query)
-    if m:
-        name = m.group(1).strip().strip('"\'')
-        return name if len(name) >= 3 else None
-    return None
+    return _extract_module_name(_ECTS_Q_RE, query, min_len=3)
 
 
 def _contains_variants(name: str) -> list[str]:
