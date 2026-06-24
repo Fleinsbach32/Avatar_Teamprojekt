@@ -161,6 +161,19 @@ def _get_by_contains(where: dict | None, contains: str, limit: int = 3) -> list[
         return []
 
 
+def _get_by_where(where: dict | None, limit: int = 3) -> list[str]:
+    """Exakter Metadaten-Lookup via collection.get — OHNE Embedding.
+    Für exakte Treffer (z.B. module_id) ist die semantische Distanz irrelevant.
+    Gibt eine flache Dokumentliste zurück (leer bei Fehler/keinem Treffer)."""
+    base: dict = {"limit": limit, "include": ["documents"]}
+    if where is not None:
+        base["where"] = where
+    try:
+        return collection.get(**base).get("documents") or []
+    except Exception:
+        return []
+
+
 # In-Memory-Index aller Handbuch-Module. ChromaDBs where_document $contains ist ein
 # Brute-Force-Volltextscan (~1.4s über alle 67k Docs, unabhängig vom Metadaten-Filter).
 # Modulnamen-Lookups laufen stattdessen über diesen einmalig geladenen Index.
@@ -290,10 +303,10 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
     module_match = MODULE_ID_RE.search(query)
     if module_match:
         module_id = module_match.group()
-        id_results = _query_safe(_combine(where, {"module_id": module_id}), 3, query_texts=[query])
-        id_docs = id_results["documents"][0]
+        # Exakter Metadaten-Match ohne Embedding (semantische Distanz ist hier egal)
+        id_docs = _get_by_where(_combine(where, {"module_id": module_id}), 3)
         if not id_docs:
-            # Volltext-Fallback ohne Embedding — Modul-IDs sind exakte Strings
+            # Volltext-Fallback, falls module_id nicht als Metadatum, aber im Text steht
             id_docs = _get_by_contains(where, module_id, 3)
         if id_docs:
             kontext = "\n\n".join(doc[:600] for doc in id_docs)

@@ -173,26 +173,26 @@ def test_build_rag_context_studiengang_or_filter():
 
 def test_build_rag_context_module_id_exact_lookup():
     with patch("app.rag.collection") as mock_collection:
-        mock_collection.query.return_value = {
-            "documents": [["Modul: Angewandte Informatik [M-WIWI-101430] ..."]],
-            "distances": [[0.2]],
+        mock_collection.get.return_value = {
+            "documents": ["Modul: Angewandte Informatik [M-WIWI-101430] ..."],
         }
         from app.rag import build_rag_context
         _, _, distanz = build_rag_context("Was ist M-WIWI-101430?")
-    first_where = mock_collection.query.call_args_list[0].kwargs.get("where")
+    # Exakter Metadaten-Match via get (kein Embedding-Query)
+    first_where = mock_collection.get.call_args_list[0].kwargs.get("where")
     assert first_where == {"module_id": "M-WIWI-101430"}
+    assert mock_collection.query.call_count == 0
     assert distanz == 0.1
 
 
 def test_build_rag_context_module_id_with_studiengang_combines():
     with patch("app.rag.collection") as mock_collection:
-        mock_collection.query.return_value = {
-            "documents": [["Modul: X [M-WIWI-101430]"]],
-            "distances": [[0.2]],
+        mock_collection.get.return_value = {
+            "documents": ["Modul: X [M-WIWI-101430]"],
         }
         from app.rag import build_rag_context
         build_rag_context("Infos zu M-WIWI-101430?", studiengang="winfo_bsc")
-    first_where = mock_collection.query.call_args_list[0].kwargs.get("where")
+    first_where = mock_collection.get.call_args_list[0].kwargs.get("where")
     assert first_where == {"$and": [
         {"$or": [{"program": "winfo_bsc"}, {"program": "all"}]},
         {"module_id": "M-WIWI-101430"},
