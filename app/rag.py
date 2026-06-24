@@ -7,6 +7,7 @@ import chromadb
 from chromadb.utils import embedding_functions
 from sentence_transformers import CrossEncoder
 from app.bootstrap import ensure_chroma_db
+from app.prompts import context_quality_hint
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
@@ -452,22 +453,5 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
         )
 
     kontext = "\n\n".join(doc[:600] for doc in docs)
-
-    if beste_distanz < 0.45:
-        anweisung = (
-            "Der folgende Kontext stammt aus der KIT-Wissensdatenbank. "
-            "Nutze ihn, wenn er zur Frage passt. "
-            "Wenn der Kontext die Frage nicht beantwortet oder ein anderes Thema behandelt, "
-            "ignoriere ihn und antworte auf Basis deines allgemeinen Hochschulwissens. "
-            "Wenn nach einem bestimmten Modul gefragt wird, nenne es nur wenn es explizit "
-            "im Kontext steht — schlage niemals andere Modulnamen als Alternative vor. "
-            "Erfinde niemals Inhalte aus einem unpassenden Kontext."
-        )
-    else:
-        anweisung = (
-            "Nutze allgemeines Hochschulwissen. "
-            "Nur wenn es um verbindliche Fristen oder offizielle Regelungen geht, "
-            "empfiehl beiläufig eine kurze Bestätigung auf campus.kit.edu oder beim Prüfungsamt — "
-            "nicht in jeder Antwort und jedes Mal anders formuliert."
-        )
+    anweisung = context_quality_hint(beste_distanz)
     return kontext, anweisung, beste_distanz

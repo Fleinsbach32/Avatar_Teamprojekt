@@ -96,7 +96,8 @@ def test_build_rag_context_general_fallback():
             from app.rag import build_rag_context
             _, anweisung, distanz = build_rag_context("Testfrage")
     assert distanz == 0.9
-    assert "allgemeines Hochschulwissen" in anweisung
+    assert "campus.kit.edu" in anweisung          # Tier-3: Verweis bei Unsicherheit
+    assert "allgemeinen Wissen" in anweisung      # Tier-3: Kennzeichnungspflicht
 
 def test_build_rag_context_truncates_docs_at_600():
     with patch("app.rag.collection") as mock_collection:
@@ -147,8 +148,8 @@ def test_rag_fallback_no_disclaiming():
         }
         from app.rag import build_rag_context
         _, anweisung, _ = build_rag_context("Testfrage")
-    assert "ergänze am Ende" not in anweisung
-    assert "nicht in jeder Antwort" in anweisung
+    assert "kennzeichne" in anweisung.lower()     # Kennzeichnungspflicht für allgemeines Wissen
+    assert "campus.kit.edu" in anweisung          # Verweis bei Unsicherheit
 
 
 # ── TP2: Modul-ID + Studiengang $or-Filter ────────────────
