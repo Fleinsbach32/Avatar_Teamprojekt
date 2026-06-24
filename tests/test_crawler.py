@@ -106,3 +106,22 @@ def test_decode_response_utf8_without_charset_header():
     assert "Prüfungsamt" in text
     assert "Fakultät" in text
     assert "�" not in text
+
+
+# ── extract_text_html: Boilerplate ────────────────────────
+def test_extract_text_html_drops_div_navigation():
+    from bs4 import BeautifulSoup
+    html = """
+    <html><body>
+      <div class="main-navigation">Startseite Über uns Kontakt</div>
+      <div id="cookie-banner">Wir nutzen Cookies</div>
+      <main><p>Die Bewerbungsfrist endet am 15. Juli.</p></main>
+      <footer class="site-footer">Impressum Datenschutz</footer>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    text = crawler.extract_text_html(soup)
+    assert "Bewerbungsfrist endet am 15. Juli" in text
+    assert "Über uns" not in text
+    assert "Cookies" not in text
+    assert "Impressum" not in text

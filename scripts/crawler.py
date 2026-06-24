@@ -278,10 +278,24 @@ def _decode_response(resp) -> BeautifulSoup:
     return BeautifulSoup(resp.content, "html.parser", from_encoding=resp.apparent_encoding)
 
 
+_BOILERPLATE_RE = re.compile(
+    r"nav|menu|header|footer|cookie|breadcrumb|sidebar|skip-link|social",
+    re.IGNORECASE,
+)
+
+
 def extract_text_html(soup: BeautifulSoup) -> str:
-    for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
+    # Semantische Boilerplate-Tags entfernen
+    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form", "noscript"]):
         tag.decompose()
-    text = soup.get_text(separator=" ", strip=True)
+    # div/section/ul mit boilerplate-typischer class/id entfernen
+    for attr in ("class", "id"):
+        for tag in soup.find_all(attrs={attr: _BOILERPLATE_RE}):
+            tag.decompose()
+    # Bevorzugt Hauptinhalt; sonst body; sonst gesamtes Dokument
+    main = (soup.find("main") or soup.find("article")
+            or soup.find(id="content") or soup.body or soup)
+    text = main.get_text(separator=" ", strip=True)
     return re.sub(r"\s{2,}", " ", text).strip()
 
 
