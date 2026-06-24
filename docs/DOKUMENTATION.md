@@ -3,7 +3,7 @@
 Detaillierte Erklärung des Codes und der Methodik hinter der KIRA-Studienberatung
 (KIT) mit sprechendem Avatar.
 
-**Stand:** 16.06.2026 · **Branch:** feature/tavus
+**Stand:** 24.06.2026 · **Branch:** feature/tavus
 
 ---
 
@@ -46,17 +46,19 @@ Das Backend ist in ein `app/`-Paket aufgeteilt (statt einer einzelnen
 | Datei | Verantwortung |
 |---|---|
 | `app/main.py` | FastAPI-App-Wiring: Middleware, Router-Einbindung, Lifespan-Warmup, `/health`, `/` |
-| `app/auth.py` | HTTP Basic Auth (`check_auth`) für Browser-Endpoints; Tavus-LLM-Endpoints ausgenommen |
+| `app/bootstrap.py` | `ensure_chroma_db()` — lädt die ChromaDB beim ersten Start von Google Drive (Railway-Deploy); No-Op lokal |
 | `app/routes/chat.py` | `POST /chat` — getippter Pfad (SSE-Stream, Text-Prompt) |
 | `app/routes/tavus.py` | `POST /tavus/session`, `/tavus/end`, `/tavus/message`, `/tavus/settings`, `/tavus/llm` (+ Aliase) — Voice-Pfad |
 | `app/routes/avatar.py` | `GET /avatar/config` — Provider-Konfiguration (derzeit nur Tavus) |
 | `app/prompts.py` | `KIRA_BASE_PROMPT` + getrennte Text-/Voice-Erweiterungen (DE/EN), `build_prompt(mode, lang)` |
-| `app/rag.py` | ChromaDB-Client, `build_rag_context()`, `STUDIENGANG_FILES` (Studiengang-Filter) |
-| `app/gemini.py` | Gemini-Client, `gemini_config()`, SSE-Header |
+| `app/rag.py` | ChromaDB-Client, `build_rag_context()`, `STUDIENGANG_FILES` (Studiengang-Filter), `context_quality_hint()`-Anbindung |
+| `app/gemini.py` | Gemini-Client, `gemini_config()`, SSE-Header, `stream_gemini()` (Retry mit Backoff + flash-lite-Fallback) |
 | `app/session.py` | In-Memory-Sessions, TTL-Aufräumung, Satzanfang-Variation |
 | `static/index.html` | Komplettes Frontend (HTML + CSS + Vanilla-JS): Chat-Panel, Avatar-Einbindung, SSE-Konsum, Sprach-/Studiengang-Auswahl |
-| `scripts/fill_db.py` | Befüllt ChromaDB einmalig aus `data/faq.json` + PDFs aus `data/pdfs/` (Upsert in 5000er-Batches) |
-| `crawler.py` | BFS-Web-Crawler für wiwi.kit.edu: crawlt, chunked und befüllt ChromaDB direkt; unterstützt PDF-Extraktion, robots.txt, Shibboleth-Erkennung und Modul-Bewertungen |
+| `scripts/fill_db.py` | Befüllt ChromaDB einmalig aus `data/faq_de.json` + `data/faq_eng.json` + PDFs aus `data/pdfs/` (Upsert in 5000er-Batches) |
+| `scripts/crawler.py` | BFS-Web-Crawler für wiwi.kit.edu: crawlt, chunked und befüllt ChromaDB; korrektes HTML-Encoding, Boilerplate-Entfernung, Chunk-Dedup + Qualitätsfilter (`clean_chunks`), PDF-Extraktion, robots.txt |
+| `scripts/eval_rag.py` | Offline-Retrieval-Eval gegen `data/eval_set.json` (Fakt-Recall) |
+| `scripts/bench_latency.py` | Latenz-Benchmark: RAG-Zeit, Gemini-TTFT, Generierungszeit je Gold-Frage |
 | `run.ps1` | Idempotenter Einzel-Start: .env-Validierung → ngrok + pip + DB-Befüllung (falls nötig) → ngrok-Tunnel → uvicorn |
 | `crawl.ps1` | Einzel-Befehl für den Crawler: pip → Crawl → ChromaDB-Einbettung; Modi: Standard, `-FillDbOnly`, `-InjectRatings` |
 | `tests/` | pytest-Tests; schwere Abhängigkeiten (ChromaDB, Gemini, Torch) sind in `conftest.py` gemockt |
@@ -178,12 +180,15 @@ Treffer-Qualität bekommt das Modell eine andere Anweisung.
 
 ## 5. RAG-Methodik (Retrieval-Augmented Generation)
 
-**Befüllung (`scripts/fill_db.py`):**
-- FAQ-Einträge aus `data/faq.json` werden als "Frage: … / Antwort: …"-Texte
-  gespeichert.
+**Befüllung (`scripts/fill_db.py` + `scripts/crawler.py`):**
+- FAQ-Einträge aus `data/faq_de.json` + `data/faq_eng.json` werden als
+  "Frage: … / Antwort: …"-Texte gespeichert.
 - PDFs aus `data/pdfs/` (z.B. Modulhandbücher) werden seitenweise extrahiert und in Chunks von
   400 Zeichen mit 50 Zeichen Überlappung zerlegt (Überlappung verhindert, dass
   Information an Chunk-Grenzen verloren geht).
+- Webcrawl-Chunks (`scripts/crawler.py`) durchlaufen `clean_chunks`: korrektes
+  HTML-Encoding, Boilerplate-Entfernung, Unicode-Normalisierung, Dedup über den
+  Lauf und Qualitätsfilter. Stand 24.06.2026: 77.004 Einträge gesamt.
 - Embedding-Modell: `paraphrase-multilingual-MiniLM-L12-v2`
   (mehrsprachig, gut für Deutsch, klein genug für CPU).
 
@@ -307,23 +312,13 @@ ngrok-Tunnels (gibt die öffentliche URL aus) und uvicorn auf Port 8000 mit
 `--reload` (Modulpfad `app.main:app`). Folgeaufrufe überspringen erledigte
 Schritte (pip via `.pip-stamp`, ngrok via Tunnel-Probe auf Port 4040).
 
-### HTTP Basic Auth
+### Zugriffsschutz
 
-Der Server verlangt HTTP-Basic-Authentifizierung auf allen Routen außer
-`/health`. Credentials werden über `.env` gesetzt:
-
-```
-APP_USERNAME=admin
-APP_PASSWORD=geheim
-```
-
-Der Browser zeigt automatisch ein Login-Fenster. Für den **gesprochenen**
-Tavus-Pfad müssen die Credentials direkt in der Custom-LLM-URL kodiert werden,
-da Tavus-Server keine Browser-Auth-Dialoge nutzen können:
-
-```
-https://user:passwort@meine-ngrok-url.ngrok.app/tavus/llm
-```
+Der Server hat **keine eingebaute Authentifizierung** — der Code ist nicht öffentlich
+und wird in einer kontrollierten Umgebung betrieben. Ein früherer HTTP-Basic-Auth-Layer
+wurde entfernt (er hätte den serverseitig von Tavus aufgerufenen Voice-Pfad ohnehin
+blockiert). Für einen öffentlichen Betrieb müsste ein Auth-/Rate-Limiting-Layer ergänzt
+werden, der die Tavus-LLM-Endpoints ausnimmt.
 
 ### Wissensbasis neu crawlen
 
@@ -338,17 +333,6 @@ https://user:passwort@meine-ngrok-url.ngrok.app/tavus/llm
 den BFS-Crawler für wiwi.kit.edu und befüllt anschließend ChromaDB. Gecrawlte
 JSON-Dateien landen in `crawled_data/` (in `.gitignore`).
 
-### Web-Authentifizierung
-
-Die Browser-Endpoints (`/`, `/chat`, `/avatar/config`,
-`/tavus/session|end|message|settings`) sind per HTTP Basic Auth geschützt
-(`app/auth.py`, Zugangsdaten aus `APP_USERNAME`/`APP_PASSWORD` in der `.env`,
-Default `admin`/`geheim`). Der Browser fragt die Zugangsdaten einmal ab und sendet
-sie danach automatisch mit. **Ausgenommen** sind die von Tavus serverseitig
-aufgerufenen LLM-Endpoints (`/tavus/llm`, `/tavus/llm/chat/completions`,
-`/chat/completions`) und `/health` — Tavus kann keine Credentials senden, eine
-Auth darauf würde den gesprochenen Avatar-Pfad mit 401 abbrechen.
-
 ---
 
 ## 10. Bekannte Grenzen
@@ -361,8 +345,8 @@ Auth darauf würde den gesprochenen Avatar-Pfad mit 401 abbrechen.
 - **CORS ist offen** (`allow_origins=["*"]`) — für Produktion einschränken.
 - **Gesprochener Pfad ohne Satzanfang-Variation:** `/tavus/llm` hat keine
   Session-ID, daher greift die Variation dort nicht.
-- **Auth nur als HTTP Basic, kein Rate-Limiting** — einfacher Passwortschutz für
-  die UI (siehe Abschnitt 9); für Produktion ggf. stärkeres Auth-Verfahren und
-  Rate-Limiting ergänzen.
+- **Kein Auth / kein Rate-Limiting** — der Server ist ungeschützt (Code nicht
+  öffentlich, kontrollierte Umgebung). Für Produktion Auth-/Rate-Limiting-Layer
+  ergänzen, der die Tavus-LLM-Endpoints ausnimmt.
 - Der frühere Google-API-Key liegt in der Git-Historie (Commits vor dieser
   Umbauphase) und sollte rotiert werden.

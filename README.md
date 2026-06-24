@@ -57,7 +57,7 @@ Die Toolbar erscheint wenn das Avatar-Video startet und verschwindet bei Gesprä
 
 ## Architektur
 
-- **Backend:** FastAPI im `app/`-Paket — RAG über ChromaDB + Google Gemini 2.5 Flash.
+- **Backend:** FastAPI im `app/`-Paket — RAG über ChromaDB + Google Gemini 2.5 Flash (Fallback auf `gemini-2.5-flash-lite` bei Überlastung, mit exponentiellem Backoff in [app/gemini.py](app/gemini.py)).
   - `app/main.py`: App-Wiring, Middleware, `/health`, Static-Files; Reranker-Warmup im Lifespan
   - `app/routes/chat.py` → `/chat`: SSE-Streaming für den Text-Chat (Text-Prompt)
   - `app/routes/tavus.py` → `/tavus/llm`: OpenAI-kompatibles Streaming für Tavus CVI (Voice-Prompt)
@@ -66,19 +66,21 @@ Die Toolbar erscheint wenn das Avatar-Video startet und verschwindet bei Gesprä
   - `app/rag.py`: zweistufige ChromaDB-Suche mit CrossEncoder-Reranker, Studiengang-Filter, Modul-ID- und Modul-Namen-Lookup
   - `app/session.py`: In-Memory-Sessions
 - **Frontend:** `static/index.html` — Chat-Panel + Tavus-Avatar (Daily.co) + Avatar-Toolbar.
-- **Wissensbasis:** `scripts/fill_db.py` lädt `data/faq_de.json` + `data/faq_eng.json` + PDFs aus `data/pdfs/` modulweise in ChromaDB (67.112 Einträge, Stand 17.06.2026).
-  - DB-Pfad: `chroma_db/` im Projekt-Root. ZIP-Backup: `data/chroma_db.zip` (1,15 GB).
+- **Wissensbasis:** `scripts/fill_db.py` lädt `data/faq_de.json` + `data/faq_eng.json` + PDFs aus `data/pdfs/` modulweise in ChromaDB; `scripts/crawler.py` ergänzt die Webcrawl-Chunks (77.004 Einträge, Stand 24.06.2026).
+  - DB-Pfad: `chroma_db/` im Projekt-Root (bzw. `CHROMA_DB_DIR`). ZIP-Backup: `data/chroma_db.zip`.
 
 ### RAG-Strategie
 
 Die Suche ist zweistufig wenn ein Studiengang gewählt ist:
 
-1. **Stufe 1 — Studiengang-Handbuch** (`program == studiengang`, n=8): Modulhandbuch-Chunks des gewählten Studiengangs erhalten Vorrang (n=12 für Pflichtmodul-Anfragen).
-2. **Stufe 2 — Allgemeines** (`program == "all"`, n=4): FAQ, Web-Crawl, studiengangsübergreifende Infos.
+1. **Stufe 1 — Studiengang-Handbuch** (`program == studiengang`, n=6): Modulhandbuch-Chunks des gewählten Studiengangs erhalten Vorrang (n=9 für Pflichtmodul-Anfragen).
+2. **Stufe 2 — Allgemeines** (`program == "all"`, n=3): FAQ, Web-Crawl, studiengangsübergreifende Infos.
 
-Der zusammengeführte Kandidatenpool (12 bzw. 16 Chunks) wird durch einen **CrossEncoder-Reranker** (`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`) neu bewertet; die top-6 Chunks gehen in den Kontext. `_merge_handbook_priority()` stellt sicher, dass mindestens 3 studiengangs-spezifische Handbuch-Chunks erhalten bleiben, auch wenn der Reranker generische Web-Chunks höher bewertet.
+Beide Stufen laufen parallel (`ThreadPoolExecutor`). Der zusammengeführte Kandidatenpool wird durch einen **CrossEncoder-Reranker** (`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`) neu bewertet; die top-6 Chunks gehen in den Kontext. `_merge_handbook_priority()` stellt sicher, dass mindestens 3 studiengangs-spezifische Handbuch-Chunks erhalten bleiben, auch wenn der Reranker generische Web-Chunks höher bewertet. Bei sehr guter Embedding-Distanz (< 0,3) wird der Reranker übersprungen (Latenz).
 
-Ohne Studiengang-Filter: einstufige semantische Suche mit n=6 über die gesamte Wissensbasis (kein Reranker).
+Ohne Studiengang-Filter: einstufige semantische Suche mit n=6 über die gesamte Wissensbasis.
+
+Die an das LLM gehängte Grounding-Anweisung wird über `context_quality_hint(distanz)` ([app/prompts.py](app/prompts.py)) dreistufig nach Treffer-Qualität gesetzt: sicherer Kontext → strikt aus DB; lückenhaft → ergänzen; kein Treffer → Allgemeinwissen, bei echter Unsicherheit ehrlich auf campus.kit.edu verweisen.
 
 Spezielle Erkennungspfade in `app/rag.py`:
 - **Modul-ID** (`M-WIWI-…`, `T-WIWI-…`): Metadaten-Lookup → Volltext-Fallback (`$contains`).
@@ -116,19 +118,22 @@ $env:PYTHONIOENCODING="utf-8"; python scripts/check_db.py
 
 Zeigt Eintragsanzahl, Typ-Verteilung, Studiengänge und Sanity Checks der ChromaDB. Schneller Einstieg zur Diagnose von DB-Problemen.
 
-### DB-Inspektion (detailliert)
+### Retrieval-Grounding-Eval
 
 ```powershell
-$env:PYTHONIOENCODING="utf-8"; python scripts/inspect_db.py
+$env:PYTHONIOENCODING="utf-8"; python scripts/eval_rag.py
 ```
 
-Zeigt Modul-IDs je Studiengang, prüft spezifische Modul-Suchen und gibt
-Stichproben der ChromaDB-Einträge aus. Nützlich zur Diagnose von RAG-Fehlern.
+Prüft offline (ohne Server/LLM) anhand von `data/eval_set.json`, ob die erwarteten Fakten
+im abgerufenen Kontext stehen. Gibt Fakt-Recall und bestandene Fragen aus. `--save baseline.json`
+/ `--compare baseline.json` für Vorher/Nachher-Vergleiche (z.B. nach einem Re-Crawl).
 
 ### Latenz-Benchmark
 
 ```powershell
-$env:PYTHONIOENCODING="utf-8"; python scripts/bench_rag.py
+$env:PYTHONIOENCODING="utf-8"; python scripts/bench_latency.py
 ```
 
-Misst die RAG-Latenz mit und ohne Reranker je Query-Typ (mit/ohne Studiengang-Filter, Modul-ID-Lookup). Nützlich zum Vergleich von Konfigurationsänderungen.
+Misst pro Gold-Frage RAG-Zeit, Gemini-TTFT und Generierungszeit (Median/Ø). `--no-llm` misst
+nur RAG offline; `--model <name>` erzwingt ein Gemini-Modell (Modellvergleich); `--show-answers`
+gibt die generierten Antworten aus; `--save` schreibt eine JSON-Baseline.
