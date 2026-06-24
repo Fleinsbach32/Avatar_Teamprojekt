@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 chroma_db/
 data/chroma_db.zip
+chroma_db.zip
+*.tar.gz
 crawled_data/
 .superpowers/
 tests/__pycache__/
