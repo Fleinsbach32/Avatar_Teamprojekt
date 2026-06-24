@@ -41,8 +41,9 @@ def _aggregate(records: list[dict]) -> dict:
     return agg
 
 
-async def measure_one(question: str, studiengang, with_llm: bool) -> dict:
-    """Misst RAG-Zeit und (optional) Gemini-TTFT/Generierungszeit für eine Frage."""
+async def measure_one(question: str, studiengang, with_llm: bool, model=None) -> dict:
+    """Misst RAG-Zeit und (optional) Gemini-TTFT/Generierungszeit für eine Frage.
+    `model` (optional) erzwingt ein bestimmtes Gemini-Modell für den Vergleich."""
     from app.rag import build_rag_context
 
     t0 = time.perf_counter()
@@ -52,6 +53,7 @@ async def measure_one(question: str, studiengang, with_llm: bool) -> dict:
     ttft_ms = gen_ms = None
     e2e_ms = rag_ms
     ok = True
+    answer = None
     if with_llm:
         from app.gemini import stream_gemini, GeminiUnavailable, GeminiMidStreamError
         from app.prompts import build_prompt
@@ -66,11 +68,12 @@ Kontext:
 Frage: {question}"""
         t1 = time.perf_counter()
         first = None
+        parts: list[str] = []
         try:
-            async for chunk in stream_gemini(prompt, 400, 0):
+            async for chunk in stream_gemini(prompt, 400, 0, model=model):
                 if first is None:
                     first = time.perf_counter()
-                _ = chunk
+                parts.append(chunk)
         except (GeminiUnavailable, GeminiMidStreamError):
             # Gemini-Ausfall (z.B. 503): Frage als fehlgeschlagen vermerken,
             # Benchmark läuft weiter statt zu crashen.
@@ -81,6 +84,7 @@ Frage: {question}"""
                 ttft_ms = (first - t1) * 1000
             gen_ms = (last - t1) * 1000
             e2e_ms = rag_ms + gen_ms
+            answer = "".join(parts).strip()
 
     return {
         "question": question,
@@ -90,20 +94,22 @@ Frage: {question}"""
         "ttft_ms": round(ttft_ms, 1) if ttft_ms is not None else None,
         "gen_ms": round(gen_ms, 1) if gen_ms is not None else None,
         "e2e_ms": round(e2e_ms, 1),
+        "answer": answer,
     }
 
 
-async def run(with_llm: bool) -> dict:
+async def run(with_llm: bool, model=None) -> dict:
     from dotenv import load_dotenv
     load_dotenv(PROJECT_ROOT / ".env")
 
     eval_set = json.loads(EVAL_SET_PATH.read_text(encoding="utf-8"))
     records = []
     for item in eval_set:
-        rec = await measure_one(item["question"], item.get("studiengang"), with_llm)
+        rec = await measure_one(item["question"], item.get("studiengang"), with_llm, model=model)
         records.append(rec)
     return {
         "with_llm": with_llm,
+        "model": model or "default (flash + flash-lite-Fallback)",
         "questions": len(records),
         "failed": sum(1 for r in records if not r.get("ok", True)),
         "aggregate": _aggregate(records),
@@ -116,6 +122,7 @@ def _print(summary: dict) -> None:
     mode = "RAG + Gemini" if summary["with_llm"] else "nur RAG (--no-llm)"
     print(f"\n{'='*64}")
     print(f"  Latenz-Benchmark — {summary['questions']} Fragen — {mode}")
+    print(f"  Modell: {summary.get('model', 'default')}")
     failed = summary.get("failed", 0)
     if failed:
         print(f"  ⚠ {failed} Frage(n) fehlgeschlagen (Gemini-Ausfall, z.B. 503) — nicht in Median/Ø")
@@ -132,14 +139,31 @@ def _print(summary: dict) -> None:
     print()
 
 
+def _print_answers(summary: dict) -> None:
+    print(f"\n{'-'*64}")
+    print("  GENERIERTE ANTWORTEN")
+    print(f"{'-'*64}")
+    for r in summary["records"]:
+        ans = (r.get("answer") or "—").replace("\n", " ")
+        if len(ans) > 200:
+            ans = ans[:200] + "…"
+        print(f"\n  • {r['question']}")
+        print(f"    {ans}")
+    print()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="KIRA Latenz-Benchmark")
     parser.add_argument("--no-llm", action="store_true", help="Nur RAG messen (offline)")
+    parser.add_argument("--model", help="Gemini-Modell erzwingen (z.B. gemini-2.5-flash-lite)")
+    parser.add_argument("--show-answers", action="store_true", help="Generierte Antworten ausgeben")
     parser.add_argument("--save", help="Ergebnis als JSON speichern")
     args = parser.parse_args()
 
-    summary = asyncio.run(run(with_llm=not args.no_llm))
+    summary = asyncio.run(run(with_llm=not args.no_llm, model=args.model))
     _print(summary)
+    if args.show_answers and not args.no_llm:
+        _print_answers(summary)
 
     if args.save:
         Path(args.save).write_text(
