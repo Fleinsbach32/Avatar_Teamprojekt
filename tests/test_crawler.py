@@ -88,3 +88,21 @@ def test_normalize_text_collapses_whitespace():
 def test_normalize_text_strips_control_chars():
     # \x00 und \x07 werden entfernt (kein Space-Ersatz)
     assert crawler._normalize_text("Text\x00mit\x07Steuerzeichen") == "TextmitSteuerzeichen"
+
+
+# ── _decode_response (Encoding-Fix) ───────────────────────
+class _FakeResp:
+    def __init__(self, content: bytes, apparent_encoding: str = "utf-8"):
+        self.content = content
+        self.apparent_encoding = apparent_encoding
+
+
+def test_decode_response_utf8_without_charset_header():
+    # UTF-8-Bytes ohne charset-Header → korrekte Umlaute, kein Mojibake/U+FFFD
+    html = "<html><body><p>Prüfungsamt Fakultät Wirtschaft</p></body></html>"
+    resp = _FakeResp(html.encode("utf-8"))
+    soup = crawler._decode_response(resp)
+    text = soup.get_text()
+    assert "Prüfungsamt" in text
+    assert "Fakultät" in text
+    assert "�" not in text

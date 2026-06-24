@@ -271,6 +271,13 @@ def classify_content(url: str, text: str) -> str:
 # Text extraction
 # ---------------------------------------------------------------------------
 
+def _decode_response(resp) -> BeautifulSoup:
+    """Dekodiert den HTML-Body korrekt: Bytes an BeautifulSoup geben, das
+    Meta-charset/BOM auswertet; apparent_encoding (chardet) als Fallback-Hinweis.
+    Behebt Mojibake/U+FFFD aus dem alten BeautifulSoup(resp.text, …)."""
+    return BeautifulSoup(resp.content, "html.parser", from_encoding=resp.apparent_encoding)
+
+
 def extract_text_html(soup: BeautifulSoup) -> str:
     for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
         tag.decompose()
@@ -605,7 +612,7 @@ def crawl(
         # ── HTML ─────────────────────────────────────────────────────────────
         else:
             try:
-                soup = BeautifulSoup(resp.text, "html.parser")
+                soup = _decode_response(resp)
             except Exception as exc:
                 logger.warning("Parse error on %s: %s", url, exc)
                 log_skipped(url, "parse_error", skip_log)
