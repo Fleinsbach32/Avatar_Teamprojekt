@@ -831,7 +831,7 @@ body {
     fetch("/tavus/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lang: lang, studiengang: currentStudiengang })
+      body: JSON.stringify({ lang: lang, studiengang: currentStudiengang, session_id: sessionId })
     }).catch(() => {});
   }
 
@@ -939,7 +939,7 @@ body {
       const res = await fetch("/tavus/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lang: lang, studiengang: currentStudiengang })
+        body: JSON.stringify({ lang: lang, studiengang: currentStudiengang, session_id: sessionId })
       });
       if (!res.ok) {
         const err = await res.json();
