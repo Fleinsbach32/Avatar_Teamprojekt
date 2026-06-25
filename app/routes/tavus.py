@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.gemini import SSE_HEADERS, stream_gemini, GeminiUnavailable, GeminiMidStreamError
 from app.prompts import build_prompt, VOICE_CONTEXT
 from app.rag import build_rag_context
+from app.session import recent_history, record_turn, touch_session
 
 router = APIRouter()
 _http = httpx.AsyncClient()
@@ -24,7 +25,7 @@ VOICE_RETRY_DELAY = 2
 # Studiengang. Bei lokalem Einzel-Session-Betrieb (ein Avatar gleichzeitig) genügt
 # ein globaler Zustand; das Frontend aktualisiert ihn bei Session-Start und bei
 # jeder Änderung von Sprache oder Studiengang.
-active_voice_prefs: dict = {"lang": "de", "studiengang": None}
+active_voice_prefs: dict = {"lang": "de", "studiengang": None, "session_id": None}
 
 # URLs/Domains (z.B. campus.kit.edu) werden vorgelesen mit "punkt" statt Punkt,
 # sonst stockt die TTS an jedem Punkt. TLD muss aus Buchstaben bestehen, damit
@@ -62,6 +63,7 @@ def _flush_sentences(buf: str, final: bool = False) -> tuple[list[str], str]:
 class TavusPrefsRequest(BaseModel):
     lang: str = "de"
     studiengang: str | None = None
+    session_id: str | None = None
 
 
 class TavusEndRequest(BaseModel):
@@ -92,6 +94,7 @@ async def tavus_settings(prefs: TavusPrefsRequest):
     """Aktualisiert Sprache/Studiengang für den laufenden Voice-Pfad."""
     active_voice_prefs["lang"] = prefs.lang
     active_voice_prefs["studiengang"] = prefs.studiengang
+    active_voice_prefs["session_id"] = prefs.session_id
     return {"status": "ok", **active_voice_prefs}
 
 
@@ -104,6 +107,7 @@ async def tavus_session(prefs: TavusPrefsRequest | None = None):
     prefs = prefs or TavusPrefsRequest()
     active_voice_prefs["lang"] = prefs.lang
     active_voice_prefs["studiengang"] = prefs.studiengang
+    active_voice_prefs["session_id"] = prefs.session_id
 
     replica_id = os.getenv("TAVUS_REPLICA_ID", "")
     persona_id = os.getenv("TAVUS_PERSONA_ID", "")
@@ -198,16 +202,23 @@ async def tavus_llm(request: TavusLLMRequest):
     # zuletzt im Frontend gesetzten Voice-Einstellungen.
     lang = active_voice_prefs["lang"]
     studiengang = active_voice_prefs["studiengang"]
+    sid = active_voice_prefs["session_id"]
 
     kontext, kontext_anweisung, _ = await asyncio.to_thread(
         build_rag_context, user_message, studiengang
     )
 
-    verlauf = "\n".join(
-        f"{'Du' if m.get('role') == 'user' else 'KIRA'}: {m.get('content', '')}"
-        for m in request.messages[:-1][-6:]
-        if m.get("role") in ("user", "assistant") and m.get("content")
-    )
+    if sid:
+        # Geteilter Store: enthält getippte UND gesprochene Turns
+        touch_session(sid)
+        verlauf = "\n".join(f"{m['role']}: {m['content']}" for m in recent_history(sid))
+    else:
+        # Fallback ohne session_id: Verlauf aus den von Tavus gesendeten Nachrichten
+        verlauf = "\n".join(
+            f"{'Du' if m.get('role') == 'user' else 'KIRA'}: {m.get('content', '')}"
+            for m in request.messages[:-1][-6:]
+            if m.get("role") in ("user", "assistant") and m.get("content")
+        )
 
     prompt = f"""{build_prompt("voice", lang)}
 
@@ -223,14 +234,18 @@ Frage: {user_message}"""
 
     async def stream_answer():
         gesendet = False
+        complete = False
         buffer = ""
+        full_answer = ""
         try:
             async for text in stream_gemini(prompt, 300, VOICE_RETRY_DELAY):
                 gesendet = True
+                full_answer += text
                 buffer += text
                 deltas, buffer = _flush_sentences(buffer)
                 for d in deltas:
                     yield f'data: {json.dumps({"choices": [{"delta": {"content": d}, "finish_reason": None}]})}\n\n'
+            complete = True
         except GeminiMidStreamError:
             pass  # bereits gesendete Sätze stehen; Rest wird unten geflusht
         except GeminiUnavailable:
@@ -242,6 +257,9 @@ Frage: {user_message}"""
                 yield f'data: {json.dumps({"choices": [{"delta": {"content": d}, "finish_reason": None}]})}\n\n'
         else:
             yield f'data: {json.dumps({"choices": [{"delta": {"content": "Service momentan nicht verfügbar."}, "finish_reason": None}]})}\n\n'
+        # Nur vollständige Antworten in den geteilten Store schreiben (keine halben)
+        if complete and sid and full_answer.strip():
+            record_turn(sid, user_message, full_answer.strip())
         yield f'data: {json.dumps({"choices": [{"delta": {}, "finish_reason": "stop"}]})}\n\n'
         yield 'data: [DONE]\n\n'
 

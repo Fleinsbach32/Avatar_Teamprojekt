@@ -271,7 +271,7 @@ def test_tavus_llm_context_limit_600(mock_client, mock_collection):
 
 # ── Voice-Prefs: /tavus/settings + Wirkung auf /tavus/llm ──
 def _reset_voice_prefs():
-    test_client.post("/tavus/settings", json={"lang": "de", "studiengang": None})
+    test_client.post("/tavus/settings", json={"lang": "de", "studiengang": None, "session_id": None})
 
 
 def test_tavus_settings_updates_prefs():
@@ -321,6 +321,32 @@ def test_chat_completions_alias(mock_client, mock_collection):
     })
     assert response.status_code == 200
     assert "[DONE]" in response.text
+    _reset_voice_prefs()
+
+
+@patch("app.rag.collection")
+@patch("app.gemini.client")
+def test_tavus_llm_shares_session_memory(mock_client, mock_collection):
+    from app.session import sessions, record_turn
+    mock_collection.query.return_value = {"documents": [["Doc"]], "distances": [[0.3]]}
+    mock_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=make_async_stream(["Gesprochene Antwort."])
+    )
+    # Getippter Turn liegt schon in der Session
+    sessions.pop("s_shared", None)
+    record_turn("s_shared", "Getippte Frage zum Praktikum", "Getippte Antwort dazu")
+    # Frontend meldet die session_id an den Voice-Pfad
+    test_client.post("/tavus/settings", json={"lang": "de", "studiengang": None, "session_id": "s_shared"})
+    test_client.post("/tavus/llm", json={
+        "messages": [{"role": "user", "content": "Und wie melde ich mich an?"}],
+        "stream": True,
+    })
+    # 1) Getippter Verlauf erscheint im Voice-Prompt
+    prompt = mock_client.aio.models.generate_content_stream.call_args.kwargs["contents"]
+    assert "Getippte Frage zum Praktikum" in prompt
+    # 2) Gesprochener Turn wurde in dieselbe Session geschrieben
+    assert {"role": "Du", "content": "Und wie melde ich mich an?"} in sessions["s_shared"]
+    assert any(m["role"] == "KIRA" and "Gesprochene Antwort." in m["content"] for m in sessions["s_shared"])
     _reset_voice_prefs()
 
 
