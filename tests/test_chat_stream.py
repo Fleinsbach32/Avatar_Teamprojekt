@@ -171,7 +171,7 @@ def test_chat_history_stored(mock_client, mock_collection):
 
     history = sessions["s_hist2"]
     assert {"role": "Du", "content": "Frage A"} in history
-    assert any(m["role"] == "Bot" and "Antwort A." in m["content"] for m in history)
+    assert any(m["role"] == "KIRA" and "Antwort A." in m["content"] for m in history)
 
 
 @patch("app.rag.collection")

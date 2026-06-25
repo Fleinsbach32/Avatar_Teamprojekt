@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from app.gemini import SSE_HEADERS, stream_gemini, GeminiUnavailable, GeminiMidStreamError
 from app.prompts import build_prompt
 from app.rag import build_rag_context
-from app.session import sessions, touch_session, remember_opening, opening_instruction
+from app.session import touch_session, remember_opening, opening_instruction, recent_history, record_turn
 
 router = APIRouter()
 
@@ -27,9 +27,6 @@ class ChatRequest(BaseModel):
 @router.post("/chat")
 async def chat(request: ChatRequest):
     touch_session(request.session_id)
-    if request.session_id not in sessions:
-        sessions[request.session_id] = []
-    chat_history = sessions[request.session_id]
 
     try:
         kontext, kontext_anweisung, beste_distanz = await asyncio.to_thread(
@@ -42,7 +39,7 @@ async def chat(request: ChatRequest):
             yield f'data: {json.dumps({"type": "error", "message": "Wissensdatenbank momentan nicht verfügbar."})}\n\n'
 
         return StreamingResponse(rag_error_stream(), media_type="text/event-stream", headers=SSE_HEADERS)
-    verlauf = "\n".join(f"{m['role']}: {m['content']}" for m in chat_history[-4:])
+    verlauf = "\n".join(f"{m['role']}: {m['content']}" for m in recent_history(request.session_id))
 
     prompt = f"""{build_prompt("text", request.lang)}{opening_instruction(request.session_id)}
 
@@ -69,9 +66,7 @@ Frage: {request.message}"""
 
         answer = "".join(chat_parts).strip()
         remember_opening(request.session_id, answer)
-
-        sessions[request.session_id].append({"role": "Du", "content": request.message})
-        sessions[request.session_id].append({"role": "Bot", "content": answer})
+        record_turn(request.session_id, request.message, answer)
 
         done_event = {
             "type": "done",
