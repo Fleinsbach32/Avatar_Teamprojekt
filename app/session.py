@@ -28,3 +28,20 @@ def opening_instruction(session_id: str) -> str:
     if not last:
         return ""
     return f'\n\nBeginne deine Antwort nicht mit dem Wort "{last}".'
+
+
+HISTORY_WINDOW = 6   # Nachrichten, die ins Prompt gehen (Chat + Voice gemeinsam)
+MAX_HISTORY = 20     # gespeicherte Nachrichten pro Session (Cap gegen unbegrenztes Wachstum)
+
+
+def record_turn(session_id: str, user_text: str, answer_text: str) -> None:
+    """Hängt User- + KIRA-Turn an die Session-History und trimmt auf MAX_HISTORY."""
+    hist = sessions.setdefault(session_id, [])
+    hist.append({"role": "Du", "content": user_text})
+    hist.append({"role": "KIRA", "content": answer_text})
+    del hist[:-MAX_HISTORY]
+
+
+def recent_history(session_id: str) -> list:
+    """Die letzten HISTORY_WINDOW Nachrichten der Session (leer, wenn unbekannt)."""
+    return sessions.get(session_id, [])[-HISTORY_WINDOW:]

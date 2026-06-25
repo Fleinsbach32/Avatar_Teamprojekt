@@ -369,3 +369,36 @@ def test_base_prompt_has_grounding_hierarchy():
     assert "primäre Quelle" in KIRA_BASE_PROMPT
     # Keine erzwungene Kennzeichnungs-Floskel im Base-Prompt
     assert "Nach meinem allgemeinen Wissen" not in KIRA_BASE_PROMPT
+
+
+# ── Geteiltes Session-Memory: record_turn / recent_history ──
+def test_record_turn_appends_du_and_kira():
+    from app.session import sessions, record_turn
+    sessions.pop("s_rt", None)
+    record_turn("s_rt", "Frage?", "Antwort.")
+    assert sessions["s_rt"] == [
+        {"role": "Du", "content": "Frage?"},
+        {"role": "KIRA", "content": "Antwort."},
+    ]
+
+
+def test_record_turn_caps_at_max_history():
+    from app.session import sessions, record_turn, MAX_HISTORY
+    sessions.pop("s_cap", None)
+    for i in range(MAX_HISTORY):           # 2*MAX_HISTORY Nachrichten
+        record_turn("s_cap", f"q{i}", f"a{i}")
+    assert len(sessions["s_cap"]) == MAX_HISTORY
+    assert sessions["s_cap"][-1] == {"role": "KIRA", "content": f"a{MAX_HISTORY - 1}"}
+
+
+def test_recent_history_returns_window():
+    from app.session import sessions, record_turn, recent_history, HISTORY_WINDOW
+    sessions.pop("s_win", None)
+    for i in range(5):                      # 10 Nachrichten
+        record_turn("s_win", f"q{i}", f"a{i}")
+    assert len(recent_history("s_win")) == HISTORY_WINDOW
+
+
+def test_recent_history_unknown_session_empty():
+    from app.session import recent_history
+    assert recent_history("does_not_exist_xyz") == []
