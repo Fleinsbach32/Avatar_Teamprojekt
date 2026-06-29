@@ -13,8 +13,14 @@ def ensure_chroma_db(db_dir: str) -> None:
     No-Op wenn:
     - db_dir existiert und ist nicht leer  (lokale Dev-Env oder Folge-Boot)
     - CHROMA_DRIVE_FILE_ID nicht gesetzt   (CI / lokale Dev ohne Wissensbasis)
+
+    CHROMA_FORCE_REBUILD=true überspringt den Existenz-Check und lädt neu.
     """
-    if os.path.isdir(db_dir) and os.listdir(db_dir):
+    force = os.getenv("CHROMA_FORCE_REBUILD", "").lower() in ("1", "true", "yes")
+    if force and os.path.isdir(db_dir):
+        logging.info(f"CHROMA_FORCE_REBUILD gesetzt — lösche '{db_dir}' und lade neu.")
+        shutil.rmtree(db_dir)
+    if not force and os.path.isdir(db_dir) and os.listdir(db_dir):
         return
 
     file_id = os.getenv("CHROMA_DRIVE_FILE_ID")
