@@ -415,9 +415,17 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
         if not prog_docs and all_docs:
             # Keine Handbuch-Chunks für diesen Studiengang, aber die Frage klingt nach einem Modul.
             # Prüfen ob es ein Modul-Keyword in der Query gibt — dann explizit darauf hinweisen.
-            modul_keywords = ("modul", "module", "fach", "vorlesung", "lecture", "kurs", "course",
-                              "lehrveranstaltung", "veranstaltung", "einführung", "introduction",
-                              "grundlagen", "seminar", "übung", "praktikum")
+            modul_keywords = (
+                # explizite Modul-Begriffe
+                "modul", "module", "fach", "vorlesung", "lecture", "kurs", "course",
+                "lehrveranstaltung", "veranstaltung", "einführung", "introduction",
+                "grundlagen", "seminar", "übung", "praktikum",
+                # typische Frageformulierungen
+                "was ist", "what is", "gibt es", "is there", "haben wir", "do we have",
+                "inhalt", "content", "thema", "topic", "prüfung", "exam", "klausur",
+                "ects", "leistungspunkt", "credit", "pflicht", "wahl", "elective",
+                "angeboten", "offered", "belegen", "take", "hören", "studienplan",
+            )
             if any(kw in query.lower() for kw in modul_keywords):
                 _sg_labels = {
                     "wing_bsc": "Wirtschaftsingenieurwesen B.Sc.", "wing_msc": "Wirtschaftsingenieurwesen M.Sc.",
