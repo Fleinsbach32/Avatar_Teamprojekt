@@ -412,15 +412,32 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
         prog_dists = prog_r["distances"][0]
         all_docs   = all_r["documents"][0]
         all_dists  = all_r["distances"][0]
-        if not prog_docs:
-            # Kein Treffer im gewählten Studiengang → Cross-Programm-Fallback:
-            # Modul stammt womöglich aus anderem Handbuch (z.B. DigiEco-Modul bei WIng-Filter).
-            logging.info(
-                f"[RAG] Keine Handbuch-Chunks für studiengang={studiengang!r} — Cross-Programm-Fallback."
-            )
-            fallback_r = _query_safe({"doc_type": "handbook"}, 6, query_texts=[query])
-            prog_docs  = fallback_r["documents"][0]
-            prog_dists = fallback_r["distances"][0]
+        if not prog_docs and all_docs:
+            # Keine Handbuch-Chunks für diesen Studiengang, aber die Frage klingt nach einem Modul.
+            # Prüfen ob es ein Modul-Keyword in der Query gibt — dann explizit darauf hinweisen.
+            modul_keywords = ("modul", "module", "fach", "vorlesung", "lecture", "kurs", "course",
+                              "lehrveranstaltung", "veranstaltung", "einführung", "introduction",
+                              "grundlagen", "seminar", "übung", "praktikum")
+            if any(kw in query.lower() for kw in modul_keywords):
+                _sg_labels = {
+                    "wing_bsc": "Wirtschaftsingenieurwesen B.Sc.", "wing_msc": "Wirtschaftsingenieurwesen M.Sc.",
+                    "winfo_bsc": "Wirtschaftsinformatik B.Sc.", "winfo_msc": "Wirtschaftsinformatik M.Sc.",
+                    "digieco_bsc": "Digital Economics B.Sc.", "digieco_msc": "Digital Economics M.Sc.",
+                    "wima_msc": "Wirtschaftsmathematik M.Sc.", "ieam_msc": "IEAM M.Sc.",
+                }
+                sg_label = _sg_labels.get(studiengang, studiengang)
+                logging.info(f"[RAG] Modul-Frage ohne Treffer für {studiengang!r} — gebe Hinweis zurück.")
+                hinweis = (
+                    f"Hinweis für KIRA: Im Modulhandbuch für {sg_label} wurde kein passendes Modul "
+                    f"mit diesem Namen gefunden. Das angefragte Modul existiert in diesem Studiengang nicht "
+                    f"oder trägt dort einen anderen Namen."
+                )
+                anweisung = (
+                    "Die Wissensdatenbank hat kein Modul mit diesem Namen im gewählten Studiengang gefunden. "
+                    "Teile dem Studierenden klar mit, dass dieses Modul in seinem Studiengang nicht vorkommt. "
+                    "Schlage vor, den Studiengang zu wechseln oder campus.kit.edu zu prüfen."
+                )
+                return hinweis, anweisung, 0.9
         combined_dists = prog_dists + all_dists
         # beste_distanz aus allen Kandidaten-Distanzen (Proxy für DB-Relevanz)
         beste_distanz = min(combined_dists) if combined_dists else 1.0
