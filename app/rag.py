@@ -409,14 +409,18 @@ def build_rag_context(query: str, studiengang: str | None = None) -> tuple[str, 
             all_r    = fut_all.result()
         query_ms = (time.perf_counter() - _t_query) * 1000
         prog_docs  = prog_r["documents"][0]
-        if not prog_docs:
-            logging.warning(
-                f"[RAG] Keine Handbuch-Chunks für studiengang={studiengang!r} gefunden "
-                f"— Filter greift möglicherweise nicht."
-            )
         prog_dists = prog_r["distances"][0]
         all_docs   = all_r["documents"][0]
         all_dists  = all_r["distances"][0]
+        if not prog_docs:
+            # Kein Treffer im gewählten Studiengang → Cross-Programm-Fallback:
+            # Modul stammt womöglich aus anderem Handbuch (z.B. DigiEco-Modul bei WIng-Filter).
+            logging.info(
+                f"[RAG] Keine Handbuch-Chunks für studiengang={studiengang!r} — Cross-Programm-Fallback."
+            )
+            fallback_r = _query_safe({"doc_type": "handbook"}, 6, query_texts=[query])
+            prog_docs  = fallback_r["documents"][0]
+            prog_dists = fallback_r["distances"][0]
         combined_dists = prog_dists + all_dists
         # beste_distanz aus allen Kandidaten-Distanzen (Proxy für DB-Relevanz)
         beste_distanz = min(combined_dists) if combined_dists else 1.0
