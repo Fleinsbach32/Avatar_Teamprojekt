@@ -1061,11 +1061,28 @@ body {
   }
 
   // ── Cleanup bei Seitenende ────────────────────────────
+  function endTavusConversation() {
+    if (!tavusConversationId) return;
+    const body = JSON.stringify({ conversation_id: tavusConversationId });
+    // sendBeacon braucht Blob mit JSON-Content-Type damit FastAPI es parsen kann
+    navigator.sendBeacon("/tavus/end", new Blob([body], { type: "application/json" }));
+    tavusConversationId = null;
+  }
+  // beforeunload: Desktop-Browser beim Schließen/Navigieren
   window.addEventListener("beforeunload", () => {
-    if (tavusConversationId) {
-      navigator.sendBeacon("/tavus/end", JSON.stringify({ conversation_id: tavusConversationId }));
-    }
+    endTavusConversation();
     if (tavusCall) tavusCall.destroy();
+  });
+  // pagehide: zuverlässiger auf Mobile/Safari
+  window.addEventListener("pagehide", () => {
+    endTavusConversation();
+    if (tavusCall) tavusCall.destroy();
+  });
+  // visibilitychange: greift wenn Tab in Hintergrund geht oder geschlossen wird
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      endTavusConversation();
+    }
   });
 
   // ── Chat ─────────────────────────────────────────────
